@@ -1,11 +1,45 @@
 const express = require('express');
-const { Service, User } = require('../models');
+const { Service, User, Token } = require('../models');
 const queueService = require('../services/queueService');
 const { authenticate } = require('../middleware/auth');
 const { validateObjectId, validatePriority } = require('../utils/validators');
+const { getQueueDate } = require('../utils/queueDate');
 const AppError = require('../utils/AppError');
 
 const router = express.Router();
+
+/**
+ * GET /api/services
+ * Any authenticated user.
+ * Returns active services as [{ id, name, organizationName, waitingCount }],
+ * where waitingCount is today's number of waiting tokens.
+ * Computed with ONE aggregation, not one query per service.
+ */
+router.get('/', authenticate, async (req, res, next) => {
+  try {
+    const today = getQueueDate();
+    const [services, counts] = await Promise.all([
+      Service.find({ isActive: true }).populate('organizationId', 'name').lean(),
+      Token.aggregate([
+        { $match: { queueDate: today, status: 'waiting' } },
+        { $group: { _id: '$serviceId', count: { $sum: 1 } } },
+      ]),
+    ]);
+
+    const countMap = new Map(counts.map((c) => [c._id.toString(), c.count]));
+
+    const result = services.map((s) => ({
+      id: s._id.toString(),
+      name: s.name,
+      organizationName: s.organizationId ? s.organizationId.name : '',
+      waitingCount: countMap.get(s._id.toString()) || 0,
+    }));
+
+    res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+});
 
 /**
  * POST /api/services/:serviceId/tokens

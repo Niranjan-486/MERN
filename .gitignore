@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Environment files
+.env
+**/.env
+.env.local
+
+# Build artifacts
+dist/
+**/dist/
+
+# Test coverage
+coverage/
+**/coverage/
+
+# OS and IDE files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

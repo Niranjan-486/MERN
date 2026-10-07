@@ -41,6 +41,9 @@ Terminal: completed, skipped, no_show, cancelled
   - `GET /api/tokens/:tokenId`: accessible only to the owning patient or staff/admin belonging to the service's organization.
   - `POST /api/tokens/:tokenId/cancel`: owning patient only; `userId` taken from verified JWT.
   - `POST /api/counters/:counterId/call-next`, `/start`, `/complete`, `/skip`: staff/admin only, and the counter's service must belong to the user's organization (403 otherwise).
+  - `GET /api/services`: any authenticated user; returns active services `[{ id, name, organizationName, waitingCount }]`, with all counts computed in one aggregation.
+  - `GET /api/counters`: staff/admin only; returns counters of the user's organization `[{ id, name, status, serviceId, serviceName, current: null | { tokenId, number, status } }]`.
+  - `GET /api/counters/:counterId/dashboard`: staff/admin belonging to that counter's organization only (403 otherwise); returns `{ counter, service, current, waitingCount, waiting, nowServing }` (only staff/admin responses may contain patient names; waiting is first 20 in call order).
 
 ## Real-time Layer (Socket.io)
 - The server decides all rooms; clients never choose or join rooms directly.

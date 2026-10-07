@@ -44,11 +44,25 @@ async function seed() {
       console.log(`Counter [${counter.name}]: ${counter._id}`);
     }
 
+    // Clean up any legacy seeded phones with '+' prefix
+    await User.deleteMany({
+      phone: {
+        $in: [
+          '+919999900000',
+          '+919999900001',
+          '+919999900002',
+          '+919999900003',
+          '+919999900004',
+          '+919999900005',
+        ],
+      },
+    });
+
     // 4. Staff User (associated with organization)
     const staffUser = await User.findOneAndUpdate(
-      { phone: '+919999900000' },
+      { phone: '9999900000' },
       {
-        phone: '+919999900000',
+        phone: '9999900000',
         name: 'Staff Member',
         role: 'staff',
         organizationId: organization._id,
@@ -60,7 +74,7 @@ async function seed() {
     // 5. Five Patients
     const patients = [];
     for (let i = 1; i <= 5; i++) {
-      const phone = `+91999990000${i}`;
+      const phone = `999990000${i}`;
       const name = `Patient ${i}`;
       const patient = await User.findOneAndUpdate(
         { phone },
@@ -80,18 +94,18 @@ async function seed() {
 
     console.log('\n--- Login Credentials & Instructions ---');
     console.log('1. PATIENT LOGIN:');
-    console.log('   Phone: 919999900001 (or any new phone)');
+    console.log('   Phone: 9999900001 (or any new phone)');
     console.log('   OTP Code: Defined in env var OTP_CODE (default: 123456)');
     console.log('   Command:');
     console.log(
-      '   curl -X POST http://localhost:3000/api/auth/verify-otp -H "Content-Type: application/json" -d \'{"phone":"919999900001","otp":"123456"}\''
+      '   curl -X POST http://localhost:3000/api/auth/verify-otp -H "Content-Type: application/json" -d \'{"phone":"9999900001","otp":"123456"}\''
     );
     console.log('\n2. STAFF LOGIN:');
-    console.log(`   Phone: 919999900000 (Staff Member)`);
-    console.log('   OTP Code: Defined in env var STAFF_OTP_CODE');
+    console.log(`   Phone: 9999900000 (Staff Member)`);
+    console.log('   OTP Code: Defined in env var STAFF_OTP_CODE (default: staffsecret123)');
     console.log('   Command:');
     console.log(
-      '   curl -X POST http://localhost:3000/api/auth/verify-otp -H "Content-Type: application/json" -d \'{"phone":"919999900000","otp":"<STAFF_OTP_CODE>"}\''
+      '   curl -X POST http://localhost:3000/api/auth/verify-otp -H "Content-Type: application/json" -d \'{"phone":"9999900000","otp":"staffsecret123"}\''
     );
 
     await mongoose.connection.close();

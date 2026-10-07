@@ -46,6 +46,27 @@ function normalizeAndValidatePhone(rawPhone) {
 }
 
 /**
+ * Generates candidate phone representations for database lookup,
+ * bridging 10-digit local, country-code prefixed (91), and E.164 (+) variations.
+ */
+function getPhoneCandidates(digits) {
+  const set = new Set();
+  set.add(digits);
+  set.add(`+${digits}`);
+
+  if (digits.length === 10) {
+    set.add(`91${digits}`);
+    set.add(`+91${digits}`);
+  } else if (digits.length === 12 && digits.startsWith('91')) {
+    const local = digits.slice(2);
+    set.add(local);
+    set.add(`+${local}`);
+  }
+
+  return Array.from(set);
+}
+
+/**
  * Formats a User document for public API response.
  */
 function formatUserResponse(user) {
@@ -87,8 +108,9 @@ router.post('/verify-otp', async (req, res, next) => {
       throw new AppError('VALIDATION_ERROR', 400, 'OTP code is required');
     }
 
-    // Check if user already exists to determine role for OTP verification
-    let user = await User.findOne({ phone });
+    // Check if user already exists across candidate phone variations
+    const candidates = getPhoneCandidates(phone);
+    let user = await User.findOne({ phone: { $in: candidates } });
     const role = user ? user.role : 'patient';
 
     const isValid = await verifyOtp(phone, otp, role);
