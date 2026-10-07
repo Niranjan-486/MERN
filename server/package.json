@@ -7,14 +7,21 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "test": "node node_modules/jest/bin/jest.js --runInBand --verbose",
-    "seed": "node src/scripts/seed.js"
+    "seed": "node src/scripts/seed.js",
+    "watch": "node src/scripts/watch.js"
   },
   "dependencies": {
+    "cors": "^2.8.6",
     "dotenv": "^16.4.5",
     "express": "^4.21.0",
-    "mongoose": "^8.7.0"
+    "express-rate-limit": "^8.7.1",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^8.7.0",
+    "socket.io": "^4.8.4"
   },
   "devDependencies": {
-    "jest": "^29.7.0"
+    "jest": "^29.7.0",
+    "socket.io-client": "^4.8.4",
+    "supertest": "^7.3.1"
   }
 }

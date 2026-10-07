@@ -23,9 +23,38 @@ serving -> completed
 Terminal: completed, skipped, no_show, cancelled
 (skipped = staff skips a called patient; no_show = automatic timeout, added later)
 
-## Rules for queue operations
+## Queue Rules & Concurrency
 - Token numbers come from ONE atomic findOneAndUpdate with $inc and upsert on TokenSequence. Never read-then-write. If upsert races throw E11000 on initial creation, retry once.
 - "Call next" is ONE atomic findOneAndUpdate (waiting -> called), sorted by priority desc then number asc, so two counters can never take the same token.
 - Every status change goes through the state machine, and every update includes the expected current status in its filter.
 - Business logic lives in services/, never in routes or socket handlers.
+- Services never touch sockets: after DB write succeeds, queueService publishes an in-process domain event `tokenChanged`.
 - A queue is per service per day. queueDate uses a configurable timezone (TIMEZONE env var, default Asia/Kolkata).
+
+## Authentication & Authorization Rules
+- JWT payload: `{ sub: user._id, role, organizationId }`, signed with JWT_SECRET (min 32 chars), expiry 12h.
+- Mock OTP verification via `otpService`: patients and brand-new phones verify against `OTP_CODE` (default demo code); staff/admin against confidential `STAFF_OTP_CODE` (min 8 chars).
+- Brand-new phone numbers are atomically registered with role `patient` via `$setOnInsert` on the unique `phone` index. If name is omitted, defaults to `Patient <last 4 digits>`. Role is NEVER accepted from the client.
+- Auth endpoints (`/api/auth/*`) are rate-limited to 10 requests/min per IP (skipped in test environment).
+- Route authorization:
+  - `POST /api/services/:serviceId/tokens`: for patients, `userId` is forced to `req.user.id` and `priority` is forced to 0 (cannot self-assign emergency). Staff/admin can specify `{ userId, priority }` for patients, but only for services in their organization.
+  - `GET /api/tokens/:tokenId`: accessible only to the owning patient or staff/admin belonging to the service's organization.
+  - `POST /api/tokens/:tokenId/cancel`: owning patient only; `userId` taken from verified JWT.
+  - `POST /api/counters/:counterId/call-next`, `/start`, `/complete`, `/skip`: staff/admin only, and the counter's service must belong to the user's organization (403 otherwise).
+
+## Real-time Layer (Socket.io)
+- The server decides all rooms; clients never choose or join rooms directly.
+- `io.use` verifies the handshake JWT (`socket.handshake.auth.token`).
+- Rooms architecture:
+  - `user:{userId}`: joined first upon connection.
+  - `service:{serviceId}`: joined by patients who have active tokens for today; joined by all sockets of a user upon `tokenChanged` with status `waiting`; joined by staff/admin for all services in their organization.
+- Event contract (full current state payloads, never deltas):
+  - `token:updated` -> room `user:{userId}`: `{ tokenId, serviceId, number, status, priority, peopleAhead, counterName }` (`peopleAhead` is integer only while waiting, else `null`; `counterName` is string only while called/serving, else `null`).
+  - `queue:updated` -> room `service:{serviceId}`: `{ serviceId, queueDate, waitingCount, nowServing: [{ counterId, counterName, tokenNumber, status }] }` (no personal patient data).
+- Single-flight coalescing per `(serviceId, queueDate)`:
+  - Realtime adapter subscribes to `tokenChanged` and batches updates using a pending token set.
+  - Only one database read run executes per key at a time. If new events arrive while a run is in flight, exactly one subsequent rerun is executed.
+  - Idle keys are cleaned up.
+- Reconnect REST sources of truth:
+  - `GET /api/me/tokens/active`: active tokens of the authenticated user today, matching `token:updated` format.
+  - `GET /api/services/:serviceId/queue`: public queue state matching `queue:updated` format.

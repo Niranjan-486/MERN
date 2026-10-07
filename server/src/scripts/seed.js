@@ -44,7 +44,7 @@ async function seed() {
       console.log(`Counter [${counter.name}]: ${counter._id}`);
     }
 
-    // 4. Staff User
+    // 4. Staff User (associated with organization)
     const staffUser = await User.findOneAndUpdate(
       { phone: '+919999900000' },
       {
@@ -77,6 +77,22 @@ async function seed() {
     counters.forEach((c) => console.log(`Counter ID (${c.name}): ${c._id}`));
     console.log(`Staff User ID   : ${staffUser._id}`);
     patients.forEach((p) => console.log(`Patient ID (${p.name}): ${p._id}`));
+
+    console.log('\n--- Login Credentials & Instructions ---');
+    console.log('1. PATIENT LOGIN:');
+    console.log('   Phone: 919999900001 (or any new phone)');
+    console.log('   OTP Code: Defined in env var OTP_CODE (default: 123456)');
+    console.log('   Command:');
+    console.log(
+      '   curl -X POST http://localhost:3000/api/auth/verify-otp -H "Content-Type: application/json" -d \'{"phone":"919999900001","otp":"123456"}\''
+    );
+    console.log('\n2. STAFF LOGIN:');
+    console.log(`   Phone: 919999900000 (Staff Member)`);
+    console.log('   OTP Code: Defined in env var STAFF_OTP_CODE');
+    console.log('   Command:');
+    console.log(
+      '   curl -X POST http://localhost:3000/api/auth/verify-otp -H "Content-Type: application/json" -d \'{"phone":"919999900000","otp":"<STAFF_OTP_CODE>"}\''
+    );
 
     await mongoose.connection.close();
     process.exit(0);

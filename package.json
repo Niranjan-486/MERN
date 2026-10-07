@@ -7,6 +7,7 @@
     "test": "npm --prefix server test",
     "dev": "npm --prefix server run dev",
     "start": "npm --prefix server start",
-    "seed": "npm --prefix server run seed"
+    "seed": "npm --prefix server run seed",
+    "watch": "npm --prefix server run watch --"
   }
 }

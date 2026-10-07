@@ -5,6 +5,7 @@ const {
   isHoldingCounterStatus,
 } = require('./tokenStateMachine');
 const { getQueueDate } = require('../utils/queueDate');
+const { publishTokenChanged } = require('../events/eventBus');
 const AppError = require('../utils/AppError');
 
 /**
@@ -34,6 +35,7 @@ async function allocateTokenNumber(serviceId, queueDate, retry = true) {
  * 2. Runs ONE atomic findOneAndUpdate with expected status in filter.
  * 3. If update matches nothing, runs follow-up read ONLY to diagnose error code:
  *    TOKEN_NOT_FOUND, FORBIDDEN, or INVALID_TRANSITION.
+ * 4. Publishes 'tokenChanged' domain event on success.
  */
 async function transitionToken({
   tokenId,
@@ -90,6 +92,16 @@ async function transitionToken({
         { currentTokenId: null }
       );
     }
+
+    // Publish domain event ONLY after DB write succeeds
+    publishTokenChanged({
+      serviceId: token.serviceId,
+      queueDate: token.queueDate,
+      tokenId: token._id,
+      userId: token.userId,
+      status: token.status,
+    });
+
     return token;
   }
 
@@ -149,6 +161,16 @@ async function joinQueue({ serviceId, userId, priority = 0 }) {
       isHoldingCounter: false,
       joinedAt: new Date(),
     });
+
+    // Publish domain event ONLY after DB write succeeds
+    publishTokenChanged({
+      serviceId: token.serviceId,
+      queueDate: token.queueDate,
+      tokenId: token._id,
+      userId: token.userId,
+      status: token.status,
+    });
+
     return token;
   } catch (err) {
     // Check if duplicate key violation was on the per-user active token index
@@ -264,6 +286,15 @@ async function callNext({ counterId }) {
   // Update counter currentTokenId as convenience
   await Counter.updateOne({ _id: counter._id }, { currentTokenId: token._id });
 
+  // Publish domain event ONLY after DB write succeeds
+  publishTokenChanged({
+    serviceId: token.serviceId,
+    queueDate: token.queueDate,
+    tokenId: token._id,
+    userId: token.userId,
+    status: token.status,
+  });
+
   return token;
 }
 
@@ -317,6 +348,42 @@ async function cancelToken({ tokenId, userId }) {
   });
 }
 
+/**
+ * Read-only queue snapshot for a service on a given queueDate.
+ * Runs two queries: one for waiting tokens (sorted by priority desc, number asc),
+ * and one for called/serving tokens (populated with counter details).
+ */
+async function getQueueSnapshot(serviceId, queueDate = getQueueDate()) {
+  const [waitingTokens, activeTokens] = await Promise.all([
+    Token.find({
+      serviceId,
+      queueDate,
+      status: 'waiting',
+    }).sort({ priority: -1, number: 1 }),
+    Token.find({
+      serviceId,
+      queueDate,
+      status: { $in: ['called', 'serving'] },
+    }).populate('counterId', 'name'),
+  ]);
+
+  const nowServing = activeTokens.map((t) => ({
+    counterId: t.counterId ? (t.counterId._id || t.counterId).toString() : null,
+    counterName: t.counterId ? t.counterId.name : null,
+    tokenNumber: t.number,
+    status: t.status,
+  }));
+
+  return {
+    serviceId: serviceId.toString(),
+    queueDate,
+    waitingCount: waitingTokens.length,
+    nowServing,
+    waitingTokens,
+    activeTokens,
+  };
+}
+
 module.exports = {
   joinQueue,
   getTokenStatus,
@@ -326,4 +393,5 @@ module.exports = {
   skipToken,
   cancelToken,
   transitionToken,
+  getQueueSnapshot,
 };
