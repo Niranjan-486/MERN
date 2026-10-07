@@ -22,6 +22,9 @@ const STATUSES = Object.freeze({
 // Statuses where the token is still "live" in the queue
 const ACTIVE_STATUSES = Object.freeze(['waiting', 'called', 'serving']);
 
+// Statuses where the token occupies a counter (called or actively being served)
+const COUNTER_HOLDING_STATUSES = Object.freeze(['called', 'serving']);
+
 // Terminal statuses — no further transitions possible
 const TERMINAL_STATUSES = Object.freeze(['completed', 'skipped', 'no_show', 'cancelled']);
 
@@ -81,12 +84,24 @@ function isActiveStatus(status) {
   return ACTIVE_STATUSES.includes(status);
 }
 
+/**
+ * Returns true if the given status occupies a counter (called or serving).
+ * Used by the Token model to maintain the isHoldingCounter flag.
+ * @param {string} status
+ * @returns {boolean}
+ */
+function isHoldingCounterStatus(status) {
+  return COUNTER_HOLDING_STATUSES.includes(status);
+}
+
 module.exports = {
   STATUSES,
   ACTIVE_STATUSES,
+  COUNTER_HOLDING_STATUSES,
   TERMINAL_STATUSES,
   TRANSITIONS,
   canTransition,
   assertTransition,
   isActiveStatus,
+  isHoldingCounterStatus,
 };

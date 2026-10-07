@@ -1,0 +1,12 @@
+{
+  "name": "smartqueue-root",
+  "version": "1.0.0",
+  "private": true,
+  "description": "SmartQueue root workspace script proxy",
+  "scripts": {
+    "test": "npm --prefix server test",
+    "dev": "npm --prefix server run dev",
+    "start": "npm --prefix server start",
+    "seed": "npm --prefix server run seed"
+  }
+}

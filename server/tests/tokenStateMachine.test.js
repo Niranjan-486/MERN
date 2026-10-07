@@ -1,11 +1,13 @@
 const {
   STATUSES,
   ACTIVE_STATUSES,
+  COUNTER_HOLDING_STATUSES,
   TERMINAL_STATUSES,
   TRANSITIONS,
   canTransition,
   assertTransition,
   isActiveStatus,
+  isHoldingCounterStatus,
 } = require('../src/services/tokenStateMachine');
 
 // ───── canTransition ─────
@@ -98,6 +100,19 @@ describe('isActiveStatus', () => {
 
   test.each(TERMINAL_STATUSES)('%s is not active', (status) => {
     expect(isActiveStatus(status)).toBe(false);
+  });
+});
+
+// ───── isHoldingCounterStatus ─────
+
+describe('isHoldingCounterStatus', () => {
+  test.each(COUNTER_HOLDING_STATUSES)('%s holds a counter', (status) => {
+    expect(isHoldingCounterStatus(status)).toBe(true);
+  });
+
+  const nonHoldingStatuses = ['waiting', 'completed', 'skipped', 'no_show', 'cancelled'];
+  test.each(nonHoldingStatuses)('%s does not hold a counter', (status) => {
+    expect(isHoldingCounterStatus(status)).toBe(false);
   });
 });
 

@@ -1,5 +1,4 @@
 const mongoose = require('mongoose');
-const { ACTIVE_STATUSES } = require('../services/tokenStateMachine');
 
 const tokenSchema = new mongoose.Schema(
   {
@@ -32,8 +31,10 @@ const tokenSchema = new mongoose.Schema(
       ref: 'Counter',
       default: null,
     },
-    // isActive: derived flag for the partial unique index (see note below)
+    // isActive: true for waiting, called, serving (managed by state machine)
     isActive: { type: Boolean, default: true },
+    // isHoldingCounter: true for called, serving (managed by state machine)
+    isHoldingCounter: { type: Boolean, default: false },
     joinedAt: { type: Date, default: null },
     calledAt: { type: Date, default: null },
     servingAt: { type: Date, default: null },
@@ -47,20 +48,26 @@ const tokenSchema = new mongoose.Schema(
 // 1. No two tokens share the same number on the same service+date
 tokenSchema.index({ serviceId: 1, queueDate: 1, number: 1 }, { unique: true });
 
-// 2. One person can only hold one active token per service.
-//    MongoDB partialFilterExpression with $in requires MongoDB 4.7+, which works
-//    with Mongo 7. However, to stay safe across versions and make updates simpler,
-//    we use the isActive boolean flag approach described in the spec.
-//    The state machine is the single place that decides whether a status is active.
+// 2. One person can only hold one active token per service per day.
+//    Includes queueDate so leftover tokens from previous days do not block today.
 tokenSchema.index(
-  { serviceId: 1, userId: 1 },
+  { serviceId: 1, queueDate: 1, userId: 1 },
   {
     unique: true,
     partialFilterExpression: { isActive: true },
   }
 );
 
-// 3. "Next in line" query: find waiting tokens sorted by priority desc, number asc
+// 3. A counter must never hold two called/serving tokens on the same day.
+tokenSchema.index(
+  { counterId: 1, queueDate: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { isHoldingCounter: true },
+  }
+);
+
+// 4. "Next in line" query: find waiting tokens sorted by priority desc, number asc
 tokenSchema.index({
   serviceId: 1,
   queueDate: 1,

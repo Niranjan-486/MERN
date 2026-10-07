@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "test": "node node_modules/jest/bin/jest.js --verbose"
+    "test": "node node_modules/jest/bin/jest.js --runInBand --verbose",
+    "seed": "node src/scripts/seed.js"
   },
   "dependencies": {
     "dotenv": "^16.4.5",
