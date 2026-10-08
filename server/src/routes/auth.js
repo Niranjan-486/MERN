@@ -13,7 +13,7 @@ const authLimiter = rateLimit({
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
-  skip: () => process.env.NODE_ENV === 'test',
+  skip: (req) => process.env.NODE_ENV === 'test' && !req.app?.get('enableRateLimitForTest'),
   handler: (_req, _res, next) => {
     next(
       new AppError(

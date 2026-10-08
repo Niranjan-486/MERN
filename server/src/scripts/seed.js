@@ -5,6 +5,25 @@ const { Organization, Service, Counter, User, Token } = require('../models');
 async function seed() {
   try {
     await connectDB();
+
+    const host = mongoose.connection.host || 'unknown';
+    const dbName = mongoose.connection.name || 'unknown';
+
+    console.log(`\nAbout to seed database "${dbName}" on host "${host}"...`);
+
+    const isLocalhost = ['localhost', '127.0.0.1', '::1'].includes(host.toLowerCase());
+    const hasYesFlag = process.argv.includes('--yes');
+
+    if (!isLocalhost && !hasYesFlag) {
+      console.error(
+        `\n[ERROR] Seed aborted: Target host "${host}" is not localhost.\n` +
+        `To seed a remote or production database, you must pass the --yes flag:\n` +
+        `  npm run seed -- --yes\n`
+      );
+      await mongoose.connection.close();
+      process.exit(1);
+    }
+
     console.log('Syncing database indexes...');
     await Token.syncIndexes();
 

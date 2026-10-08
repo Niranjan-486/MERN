@@ -1,0 +1,41 @@
+services:
+  - type: web
+    name: smartqueue-api-firstmern
+    runtime: node
+    plan: free
+    region: singapore
+    rootDir: server
+    buildCommand: npm ci
+    startCommand: node src/server.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGO_URI
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: OTP_CODE
+        value: "123456"
+      - key: STAFF_OTP_CODE
+        sync: false
+      - key: CLIENT_ORIGIN
+        value: https://smartqueue-web-firstmern.onrender.com
+      - key: TIMEZONE
+        value: Asia/Kolkata
+
+  - type: web
+    name: smartqueue-web-firstmern
+    runtime: static
+    rootDir: client
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_URL
+        value: https://smartqueue-api-firstmern.onrender.com
+      - key: VITE_DEMO_HINT
+        value: "123456"

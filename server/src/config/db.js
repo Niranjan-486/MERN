@@ -6,8 +6,17 @@ const env = require('./env');
  * Mongoose buffers commands until connected, so models work immediately.
  */
 async function connectDB() {
-  await mongoose.connect(env.MONGO_URI);
-  console.log(`MongoDB connected: ${mongoose.connection.host}`);
+  try {
+    await mongoose.connect(env.MONGO_URI, {
+      serverSelectionTimeoutMS: 10000,
+    });
+    const host = mongoose.connection.host || 'unknown';
+    const dbName = mongoose.connection.name || 'unknown';
+    console.log(`MongoDB connected to host: ${host}, database: ${dbName}`);
+  } catch (err) {
+    console.error(`MongoDB initial connection failed: ${err.message}`);
+    process.exit(1);
+  }
 }
 
 module.exports = { connectDB };

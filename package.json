@@ -11,7 +11,8 @@
     "dev:client": "npm --prefix client run dev",
     "build:client": "npm --prefix client run build",
     "start": "npm --prefix server start",
-    "seed": "npm --prefix server run seed",
+    "seed": "npm --prefix server run seed --",
+    "smoke": "npm --prefix server run smoke --",
     "watch": "npm --prefix server run watch --"
   }
 }

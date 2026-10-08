@@ -19,7 +19,7 @@ const queueService = require('../services/queueService');
 function createRealtime(httpServer) {
   const io = new Server(httpServer, {
     cors: {
-      origin: env.CLIENT_ORIGIN,
+      origin: env.CLIENT_ORIGINS,
       methods: ['GET', 'POST'],
       credentials: true,
     },
