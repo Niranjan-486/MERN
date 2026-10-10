@@ -4,6 +4,7 @@ const Counter = require('./Counter');
 const User = require('./User');
 const Token = require('./Token');
 const TokenSequence = require('./TokenSequence');
+const Notification = require('./Notification');
 
 module.exports = {
   Organization,
@@ -12,4 +13,5 @@ module.exports = {
   User,
   Token,
   TokenSequence,
+  Notification,
 };

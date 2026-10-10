@@ -7,6 +7,7 @@ const {
 const { getQueueDate } = require('../utils/queueDate');
 const { publishTokenChanged } = require('../events/eventBus');
 const { computeEtas } = require('./etaService');
+const env = require('../config/env');
 const AppError = require('../utils/AppError');
 
 /**
@@ -232,9 +233,19 @@ async function getTokenStatus(tokenId) {
     }
   }
 
+  let noShowInSec = null;
+  if (token.status === 'called' && token.calledAt) {
+    const graceMs = (env.NO_SHOW_GRACE_SECONDS || 180) * 1000;
+    noShowInSec = Math.max(
+      0,
+      Math.round((new Date(token.calledAt).getTime() + graceMs - Date.now()) / 1000)
+    );
+  }
+
   const tokenObj = {
     ...token.toObject(),
     etaSeconds,
+    noShowInSec,
   };
 
   return {
@@ -242,6 +253,7 @@ async function getTokenStatus(tokenId) {
     token: tokenObj,
     peopleAhead,
     etaSeconds,
+    noShowInSec,
   };
 }
 
@@ -455,6 +467,60 @@ async function cancelToken({ tokenId, userId }) {
 }
 
 /**
+ * Mark a called token as no_show if its grace period has elapsed.
+ * ONE atomic findOneAndUpdate through the state machine:
+ * filter: { _id: tokenId, status: 'called', calledAt: { $lte: new Date(now - graceMs + 1000) } }
+ * sets no_show, clears the counter's convenience pointer, publishes tokenChanged.
+ * A non-match is a no-op returning { changed: false, token: null }.
+ * That filter is what makes duplicate or early jobs harmless.
+ */
+async function markNoShow({
+  tokenId,
+  graceMs = (env.NO_SHOW_GRACE_SECONDS || 180) * 1000,
+  now = Date.now(),
+}) {
+  assertTransition('called', 'no_show');
+
+  const cutoff = new Date(now - graceMs + 1000);
+  const filter = {
+    _id: tokenId,
+    status: 'called',
+    calledAt: { $lte: cutoff },
+  };
+
+  const update = {
+    status: 'no_show',
+    isActive: false,
+    isHoldingCounter: false,
+  };
+
+  const token = await Token.findOneAndUpdate(filter, { $set: update }, { new: true });
+
+  if (!token) {
+    return { changed: false, token: null };
+  }
+
+  // Clear counter currentTokenId convenience pointer
+  if (token.counterId) {
+    await Counter.updateOne(
+      { _id: token.counterId, currentTokenId: token._id },
+      { currentTokenId: null }
+    );
+  }
+
+  // Publish domain event ONLY after DB write succeeds
+  publishTokenChanged({
+    serviceId: token.serviceId,
+    queueDate: token.queueDate,
+    tokenId: token._id,
+    userId: token.userId,
+    status: token.status,
+  });
+
+  return { changed: true, token };
+}
+
+/**
  * Read-only queue snapshot for a service on a given queueDate.
  * 1. Reads waiting tokens in call order (priority desc, number asc).
  * 2. Reads called/serving tokens with populated counter details.
@@ -544,6 +610,7 @@ module.exports = {
   completeToken,
   skipToken,
   cancelToken,
+  markNoShow,
   transitionToken,
   getQueueSnapshot,
   updateServiceAvgEWMA,

@@ -4,6 +4,7 @@ const env = require('./config/env');
 const { connectDB } = require('./config/db');
 const app = require('./app');
 const { createRealtime } = require('./realtime');
+const { startJobs, stopJobs } = require('./jobs');
 const {
   Organization,
   Service,
@@ -11,10 +12,11 @@ const {
   User,
   Token,
   TokenSequence,
+  Notification,
 } = require('./models');
 
 async function buildAllIndexes() {
-  const models = [Organization, Service, Counter, User, Token, TokenSequence];
+  const models = [Organization, Service, Counter, User, Token, TokenSequence, Notification];
   for (const model of models) {
     try {
       await model.init();
@@ -38,7 +40,12 @@ async function start() {
     const httpServer = http.createServer(app);
     const io = createRealtime(httpServer);
 
-    // 4. Start listening on PORT, bound to 0.0.0.0
+    // 4. Start BullMQ jobs and sweeper if enabled
+    if (env.JOBS_ENABLED) {
+      await startJobs();
+    }
+
+    // 5. Start listening on PORT, bound to 0.0.0.0
     httpServer.listen(env.PORT, '0.0.0.0', () => {
       console.log(`SmartQueue server listening on 0.0.0.0:${env.PORT}`);
     });
@@ -66,6 +73,8 @@ async function start() {
             await new Promise((resolve) => io.close(resolve));
             console.log('Socket.io server closed');
           }
+          await stopJobs();
+          console.log('Jobs subsystem stopped cleanly');
           await mongoose.connection.close(false);
           console.log('MongoDB connection closed');
           process.exit(0);

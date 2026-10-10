@@ -23,6 +23,17 @@ services:
         value: https://smartqueue-web-firstmern.onrender.com
       - key: TIMEZONE
         value: Asia/Kolkata
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: smartqueue-redis-firstmern
+          property: connectionString
+      - key: NO_SHOW_GRACE_SECONDS
+        value: "120"
+      - key: NEAR_THRESHOLD
+        value: "3"
+      - key: NOTIFY_CHANNELS
+        value: inapp,log
 
   - type: web
     name: smartqueue-web-firstmern
@@ -39,3 +50,10 @@ services:
         value: https://smartqueue-api-firstmern.onrender.com
       - key: VITE_DEMO_HINT
         value: "123456"
+
+  - type: keyvalue
+    name: smartqueue-redis-firstmern
+    plan: free
+    region: singapore
+    maxmemoryPolicy: noeviction
+    ipAllowList: []

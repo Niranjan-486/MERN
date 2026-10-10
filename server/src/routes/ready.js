@@ -1,16 +1,21 @@
 const express = require('express');
 const mongoose = require('mongoose');
+const { isRedisHealthy, isJobsRunning } = require('../jobs');
 
 const router = express.Router();
 
 router.get('/', (_req, res) => {
-  const mongoState = mongoose.connection.readyState;
-  // readyState: 0 = disconnected, 1 = connected, 2 = connecting, 3 = disconnecting
-  const isHealthy = mongoState === 1;
+  const mongoHealthy = mongoose.connection.readyState === 1;
+  const redisUp = isRedisHealthy();
+  const jobsRunning = isJobsRunning();
+
+  const isHealthy = mongoHealthy;
 
   const payload = {
     status: isHealthy ? 'ok' : 'degraded',
-    mongo: isHealthy ? 'connected' : 'not connected',
+    mongo: mongoHealthy ? 'connected' : 'not connected',
+    redis: redisUp ? 'up' : 'down',
+    jobs: jobsRunning ? 'running' : 'stopped',
     uptime: Math.floor(process.uptime()),
   };
 

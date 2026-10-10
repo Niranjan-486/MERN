@@ -4,7 +4,36 @@ const { verifyToken } = require('../middleware/auth');
 const { Service, Token } = require('../models');
 const { getQueueDate } = require('../utils/queueDate');
 const { eventBus } = require('../events/eventBus');
+const { createSingleFlightByKey } = require('../utils/singleFlightByKey');
 const queueService = require('../services/queueService');
+
+let activeIo = null;
+
+/**
+ * Returns the currently active Socket.io instance, if any.
+ */
+function getIo() {
+  return activeIo;
+}
+
+/**
+ * Emits an in-app notification event to the targeted user's room.
+ * Delivers { id, kind, title, body, tokenId, createdAt }.
+ */
+function emitNotificationToUser(userId, notification) {
+  if (!activeIo) return;
+  const payload = {
+    id: (notification._id || notification.id).toString(),
+    kind: notification.kind,
+    title: notification.title,
+    body: notification.body,
+    tokenId: (
+      notification.tokenId && (notification.tokenId._id || notification.tokenId)
+    ).toString(),
+    createdAt: notification.createdAt || new Date(),
+  };
+  activeIo.to(`user:${userId.toString()}`).emit('notification:new', payload);
+}
 
 /**
  * Creates and attaches Socket.io to the HTTP server.
@@ -24,6 +53,8 @@ function createRealtime(httpServer) {
       credentials: true,
     },
   });
+
+  activeIo = io;
 
   // 1. Authentication Middleware
   io.use((socket, next) => {
@@ -81,153 +112,115 @@ function createRealtime(httpServer) {
   });
 
   // 3. Single-Flight Coalescing Engine
-  // Map key: `${serviceId}:${queueDate}` -> State object
-  const flightMap = new Map();
+  const singleFlight = createSingleFlightByKey(
+    async (key, entry) => {
+      const [serviceId, queueDate] = key.split(':');
+      const tokensToProcess = Array.from(entry.items);
+      entry.items.clear();
 
-  function scheduleRun(key) {
-    const entry = flightMap.get(key);
-    if (!entry) return;
+      // A. Read fresh queue state from DB
+      const snapshot = await queueService.getQueueSnapshot(serviceId, queueDate);
 
-    if (entry.isRunning) {
-      // Mark for another pass once the current in-flight pass finishes
-      entry.rerunScheduled = true;
-      return;
-    }
+      // B. Fetch terminal status tokens (completed/cancelled/skipped/no_show)
+      const extraTokens =
+        tokensToProcess.length > 0
+          ? await Token.find({ _id: { $in: tokensToProcess } }).populate('counterId', 'name')
+          : [];
 
-    entry.isRunning = true;
-    executeRun(key);
-  }
+      const emittedTokenIds = new Set();
+      const graceMs = (env.NO_SHOW_GRACE_SECONDS || 180) * 1000;
+      const now = Date.now();
 
-  async function executeRun(key) {
-    const entry = flightMap.get(key);
-    if (!entry) return;
+      // C. Emit token:updated to each waiting patient
+      for (let i = 0; i < snapshot.waitingTokens.length; i++) {
+        const t = snapshot.waitingTokens[i];
+        const tid = t._id.toString();
+        emittedTokenIds.add(tid);
 
-    try {
-      do {
-        entry.rerunScheduled = false;
-
-        // Take snapshot of tokens modified in this batch and reset pending set
-        const tokensToProcess = Array.from(entry.pendingTokenIds);
-        entry.pendingTokenIds.clear();
-
-        try {
-          // A. Read fresh queue state from DB
-          const snapshot = await queueService.getQueueSnapshot(
-            entry.serviceId,
-            entry.queueDate
-          );
-
-          // B. Fetch any tokens that transitioned to terminal states (completed/cancelled)
-          // so their final status is broadcast once to their user room
-          const extraTokens =
-            tokensToProcess.length > 0
-              ? await Token.find({ _id: { $in: tokensToProcess } }).populate(
-                  'counterId',
-                  'name'
-                )
-              : [];
-
-          const emittedTokenIds = new Set();
-
-          // C. Emit token:updated to each waiting patient
-          for (let i = 0; i < snapshot.waitingTokens.length; i++) {
-            const t = snapshot.waitingTokens[i];
-            const tid = t._id.toString();
-            emittedTokenIds.add(tid);
-
-            const payload = {
-              tokenId: tid,
-              serviceId: t.serviceId.toString(),
-              number: t.number,
-              status: t.status,
-              priority: t.priority,
-              peopleAhead: i, // Index in sorted waiting array is exact count of people ahead
-              counterName: null,
-              etaSeconds: t.etaSeconds !== undefined ? t.etaSeconds : null,
-            };
-            io.to(`user:${t.userId.toString()}`).emit('token:updated', payload);
-          }
-
-          // D. Emit token:updated to each active (called/serving) patient
-          for (const t of snapshot.activeTokens) {
-            const tid = t._id.toString();
-            emittedTokenIds.add(tid);
-
-            const payload = {
-              tokenId: tid,
-              serviceId: t.serviceId.toString(),
-              number: t.number,
-              status: t.status,
-              priority: t.priority,
-              peopleAhead: null,
-              counterName: (t.counterId && t.counterId.name) || null,
-              etaSeconds: null,
-            };
-            io.to(`user:${t.userId.toString()}`).emit('token:updated', payload);
-          }
-
-          // E. Emit terminal status (completed/cancelled) for pending tokens
-          for (const t of extraTokens) {
-            const tid = t._id.toString();
-            if (!emittedTokenIds.has(tid)) {
-              emittedTokenIds.add(tid);
-              const payload = {
-                tokenId: tid,
-                serviceId: t.serviceId.toString(),
-                number: t.number,
-                status: t.status,
-                priority: t.priority,
-                peopleAhead: null,
-                counterName: (t.counterId && t.counterId.name) || null,
-                etaSeconds: null,
-              };
-              io.to(`user:${t.userId.toString()}`).emit('token:updated', payload);
-            }
-          }
-
-          // F. Emit queue:updated to the service room
-          const queuePayload = {
-            serviceId: entry.serviceId,
-            queueDate: entry.queueDate,
-            waitingCount: snapshot.waitingCount,
-            nowServing: snapshot.nowServing,
-          };
-          io.to(`service:${entry.serviceId}`).emit('queue:updated', queuePayload);
-        } catch (err) {
-          console.error(`Error in realtime execution run for ${key}:`, err);
-        }
-      } while (entry.rerunScheduled);
-    } finally {
-      entry.isRunning = false;
-      if (entry.pendingTokenIds.size === 0 && !entry.rerunScheduled) {
-        flightMap.delete(key);
+        const payload = {
+          tokenId: tid,
+          serviceId: t.serviceId.toString(),
+          number: t.number,
+          status: t.status,
+          priority: t.priority,
+          peopleAhead: i,
+          counterName: null,
+          etaSeconds: t.etaSeconds !== undefined ? t.etaSeconds : null,
+          noShowInSec: null,
+        };
+        io.to(`user:${t.userId.toString()}`).emit('token:updated', payload);
       }
+
+      // D. Emit token:updated to each active (called/serving) patient
+      for (const t of snapshot.activeTokens) {
+        const tid = t._id.toString();
+        emittedTokenIds.add(tid);
+
+        const isCalled = t.status === 'called';
+        const noShowInSec =
+          isCalled && t.calledAt
+            ? Math.max(0, Math.round((new Date(t.calledAt).getTime() + graceMs - now) / 1000))
+            : null;
+
+        const payload = {
+          tokenId: tid,
+          serviceId: t.serviceId.toString(),
+          number: t.number,
+          status: t.status,
+          priority: t.priority,
+          peopleAhead: null,
+          counterName: (t.counterId && t.counterId.name) || null,
+          etaSeconds: null,
+          noShowInSec,
+        };
+        io.to(`user:${t.userId.toString()}`).emit('token:updated', payload);
+      }
+
+      // E. Emit terminal status for pending tokens
+      for (const t of extraTokens) {
+        const tid = t._id.toString();
+        if (!emittedTokenIds.has(tid)) {
+          emittedTokenIds.add(tid);
+          const payload = {
+            tokenId: tid,
+            serviceId: t.serviceId.toString(),
+            number: t.number,
+            status: t.status,
+            priority: t.priority,
+            peopleAhead: null,
+            counterName: (t.counterId && t.counterId.name) || null,
+            etaSeconds: null,
+            noShowInSec: null,
+          };
+          io.to(`user:${t.userId.toString()}`).emit('token:updated', payload);
+        }
+      }
+
+      // F. Emit queue:updated to the service room
+      const queuePayload = {
+        serviceId,
+        queueDate,
+        waitingCount: snapshot.waitingCount,
+        nowServing: snapshot.nowServing,
+      };
+      io.to(`service:${serviceId}`).emit('queue:updated', queuePayload);
+    },
+    {
+      onError: (err, key) => {
+        console.error(`Error in realtime execution run for ${key}:`, err.message || err);
+      },
     }
-  }
+  );
 
   // 4. Domain Event Listener
   const onTokenChanged = async ({ serviceId, queueDate, tokenId, userId, status }) => {
     try {
-      // When a patient joins a queue (waiting), add all of that user's sockets to the service room
       if (status === 'waiting') {
         await io.in(`user:${userId}`).socketsJoin(`service:${serviceId}`);
       }
 
       const key = `${serviceId}:${queueDate}`;
-      let entry = flightMap.get(key);
-      if (!entry) {
-        entry = {
-          serviceId,
-          queueDate,
-          pendingTokenIds: new Set(),
-          isRunning: false,
-          rerunScheduled: false,
-        };
-        flightMap.set(key, entry);
-      }
-
-      entry.pendingTokenIds.add(tokenId.toString());
-      scheduleRun(key);
+      singleFlight.schedule(key, tokenId.toString());
     } catch (err) {
       console.error('Error handling tokenChanged domain event:', err);
     }
@@ -238,6 +231,10 @@ function createRealtime(httpServer) {
   // Expose clean teardown for test suites
   io.cleanup = () => {
     eventBus.removeListener('tokenChanged', onTokenChanged);
+    singleFlight.clear();
+    if (activeIo === io) {
+      activeIo = null;
+    }
   };
 
   return io;
@@ -245,4 +242,6 @@ function createRealtime(httpServer) {
 
 module.exports = {
   createRealtime,
+  getIo,
+  emitNotificationToUser,
 };

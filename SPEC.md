@@ -7,6 +7,7 @@
 - User: phone (unique), name, role (patient | staff | admin), organizationId (for staff/admin)
 - Token: serviceId, userId, number, queueDate (YYYY-MM-DD string), status, priority (0 normal, 1 senior citizen, 2 emergency), counterId (nullable), isActive (boolean, true for waiting/called/serving), isHoldingCounter (boolean, true for called/serving), joinedAt, calledAt, servingAt, completedAt
 - TokenSequence: serviceId, queueDate, seq    // powers atomic token numbering
+- Notification: userId, tokenId, serviceId, queueDate, kind (near | called | no_show), title, body, status (pending | sent | skipped), deliveredChannels (array of strings), attempts (default 1), sentAt
 
 ## Indexes
 - User.phone: unique
@@ -15,6 +16,9 @@
 - Token: partial unique on (serviceId, queueDate, userId), only for active statuses (where isActive is true), so one person cannot hold two active tokens in a service on the same day, while a leftover token from a previous day never blocks today's join.
 - Token: partial unique on (counterId, queueDate), only for called/serving statuses (where isHoldingCounter is true), so a counter cannot hold two called/serving tokens on the same day.
 - Token: "next in line" index on (serviceId, queueDate, status, priority desc, number asc)
+- Token: sweeper index on (status, calledAt)
+- Notification: unique on (tokenId, kind) for exactly-once notification creation
+- Notification: index on (userId, createdAt: -1) for user notifications lookup
 
 ## Token states
 waiting -> called | cancelled
@@ -61,4 +65,44 @@ Terminal: completed, skipped, no_show, cancelled
   - Idle keys are cleaned up.
 - Reconnect REST sources of truth:
   - `GET /api/me/tokens/active`: active tokens of the authenticated user today, matching `token:updated` format (including `etaSeconds`).
+  - `GET /api/me/notifications`: recent notifications for the caller today (newest first, max 20).
   - `GET /api/services/:serviceId/queue`: public queue state matching `queue:updated` format.
+
+## Wait-Time Estimates (ETA) & Service EWMA Tracking
+- **Service EWMA Tracking**:
+  - Sample calculation: `sample = completedAt - servingAt` in seconds. Samples under 10 seconds are ignored completely.
+  - Capped sample: `cappedSample = min(sample, 3 * currentAvg)` prevents forgotten "Complete" clicks from distorting estimates.
+  - Dynamic weight: `weight = max(0.2, 1 / (serviceSamples + 2))` provides fast warm-up on initial samples, transitioning to exponentially weighted moving average.
+  - Formula: `newAvg = round(currentAvg * (1 - weight) + cappedSample * weight)`.
+  - Atomic update: One atomic aggregation pipeline update with `$set` and `$cond` expressions updates `avgServiceTimeSec` and increments `serviceSamples` without read-then-write races.
+- **Pure ETA Simulation (`computeEtas`)**:
+  - Function: `computeEtas({ now, waiting, counters, avgServiceSec }) -> etaSeconds[]`.
+  - Counters filter: Only counters with `status === 'active'` participate. Paused/offline counters are excluded. If no active counters exist, all waiting ETAs are `null`.
+  - Counter busy-until simulation:
+    - Idle counter: `busyUntil = now`.
+    - Counter holding called token: `busyUntil = now + avgServiceSec`.
+    - Counter holding serving token: `busyUntil = now + max(30, avgServiceSec - secondsAlreadyServing)`.
+  - Step simulation: For each waiting token in priority/number order, assign to the counter that frees up earliest (`earliestBusyUntil`). Token's ETA = `max(0, round((earliestBusyUntil - now) / 1000))`. The selected counter is then busy until `earliestBusyUntil + avgServiceSec`.
+  - Guarantees: ETAs never decrease along the waiting list, agreed upon by both snapshots and single-token status lookups.
+
+## Timers, Reminders & Background Jobs (BullMQ + Redis)
+- **Architecture**:
+  - MongoDB is the single source of truth; Redis only stores transient timers and delivery work.
+  - Two BullMQ queues: `timers` (delayed auto no-show jobs) and `notify` (reminders and turn alerts).
+  - Deterministic job IDs (never digits-only and no colons): `noshow-<tokenId>` and `notify-<tokenId>-<kind>`.
+- **Automatic No-Show State Machine**:
+  - Auto no-show grace period: `NO_SHOW_GRACE_SECONDS` (default 180s).
+  - `queueService.markNoShow({ tokenId, graceMs, now })`: ONE atomic `findOneAndUpdate` with filter `{ _id: tokenId, status: 'called', calledAt: { $lte: cutoff } }`. Non-matches are harmless no-ops. Clears counter pointer and publishes domain event `tokenChanged`.
+- **Near-Planner**:
+  - Single-flight coalesced per `(serviceId, queueDate)`. Runs on token join, call-next, no-show, cancel, and periodically via sweeper.
+  - Finds waiting tokens where `peopleAhead <= NEAR_THRESHOLD` (default 3).
+  - Queries MongoDB `Notification.find` first to avoid Redis churn. Enqueues `notify-<tokenId>-near` only for tokens without an existing notification.
+- **Deduplicated Multi-Channel Delivery**:
+  - Unique compound index on `Notification (tokenId, kind)`.
+  - Atomic insert as `pending`. If duplicate key: returns immediately if `status` is `'sent'` or `'skipped'`, or continues delivery if `pending`.
+  - Sequential delivery over configured `NOTIFY_CHANNELS` (e.g. `inapp`, `log`). After each channel sends successfully, `deliveredChannels` is updated with `$addToSet`. Channel retries never double-send to already-delivered channels.
+- **Sweeper & State Healing**:
+  - Periodic 30s background sweeper:
+    - (a) Queries MongoDB for overdue called tokens and calls `markNoShow` directly (needs zero Redis).
+    - (b) Runs near-planner for active services today.
+  - If Redis restarts and loses all data, the sweeper heals overdue tokens and near reminders automatically.

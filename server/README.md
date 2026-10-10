@@ -263,3 +263,162 @@ Every concurrency guarantee is enforced directly at the MongoDB layer using atom
 - **Why it works**: Document-level locking serializes the operations:
   - **If callNext executes first**: The token status becomes `'called'` and `counterId` is assigned. The concurrent `cancelToken` matches status `'called'`, legally cancels the token, and resets `isHoldingCounter: false`. The counter is immediately freed, and any subsequent call-next on an empty queue returns `QUEUE_EMPTY`, never `COUNTER_BUSY`.
   - **If cancelToken executes first**: The token status becomes `'cancelled'`. The concurrent `callNext` filter `{ status: 'waiting' }` no longer matches the document, so it advances to the next waiting token or returns `QUEUE_EMPTY`. The cancelled token is never handed to a counter.
+
+---
+
+## ETA and Job Design
+
+### 1. Wait-Time Estimates (ETA) & Service EWMA Tracking
+
+#### Pure ETA Simulation (`computeEtas`)
+The waiting time estimation is calculated via a pure, deterministic simulation in `server/src/services/etaService.js`:
+- **Counter Availability Simulation**:
+  - Only counters with `status: 'active'` are considered. Paused or offline counters are ignored. If no active counters exist, every waiting token receives `etaSeconds: null`.
+  - For each active counter, its initial `busyUntil` is simulated:
+    - If idle: `busyUntil = now`.
+    - If holding a `called` token: `busyUntil = now + avgServiceSec`.
+    - If holding a `serving` token: `busyUntil = now + max(30, avgServiceSec - secondsAlreadyServing)`.
+- **Greedy Earliest-Available Counter Allocation**:
+  - Waiting tokens are evaluated in exact call order (priority desc, then token number asc).
+  - For each waiting token, the algorithm selects the counter that frees up earliest (`earliestTime`).
+  - `etaSeconds = max(0, round((earliestTime - now) / 1000))`.
+  - The assigned counter's availability is then advanced: `counter.busyUntil = earliestTime + avgServiceSec`.
+- **Properties**:
+  - ETAs never decrease along the waiting list.
+  - Snapshot ETAs (`getQueueSnapshot`) and individual token status lookups (`getTokenStatus`) call the same pure function, guaranteeing agreement.
+
+#### Service-Time EWMA Tracking
+When a token transitions `serving -> completed`, `Service.avgServiceTimeSec` and `serviceSamples` are updated in a single atomic MongoDB aggregation-pipeline update:
+- `sample = completedAt - servingAt` in seconds.
+- Samples under 10 seconds are completely ignored.
+- Samples are capped at `3 * currentAvg` to protect the average against forgotten "Complete" button clicks.
+- Fast warm-up weight formula: `weight = max(0.2, 1 / (serviceSamples + 2))`.
+- Moving average: `avg = round(avg * (1 - weight) + sample * weight)`.
+- Increments `serviceSamples` by 1 atomically without read-then-write races.
+
+---
+
+### 2. Jobs Subsystem (BullMQ + Redis)
+
+#### Table of Jobs
+
+| Job Name | Queue | Trigger | Deterministic Job ID | Idempotency Key / Check | Retry Policy | Failure Mode & Recovery |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| `noshow` | `timers` | Staff calls token (`callNext`) | `noshow-<tokenId>` | Filter `{ _id, status: 'called', calledAt: { $lte: cutoff } }` | No retry needed (delay = grace period) | If Redis wiped/crashes, background 30s `sweeper` finds overdue called tokens directly in MongoDB and executes `markNoShow`. |
+| `notify` (`near`) | `notify` | Token join, call-next, no-show, cancel, or 30s sweeper | `notify-<tokenId>-near` | Mongo unique index on `Notification (tokenId, kind)` + existence check | 4 attempts, exponential backoff from 2s | `Notification` document tracks `deliveredChannels` with `$addToSet`; channels never double-send. Sweeper triggers near-planner if Redis lost work. |
+| `notify` (`called`) | `notify` | Staff calls token (`callNext`) | `notify-<tokenId>-called` | Mongo unique index on `Notification (tokenId, kind)` | 4 attempts, exponential backoff from 2s | Same multi-channel tracking; idempotent claim. |
+| `notify` (`no_show`)| `notify` | Token marked as no-show | `notify-<tokenId>-no_show` | Mongo unique index on `Notification (tokenId, kind)` | 4 attempts, exponential backoff from 2s | Same multi-channel tracking; idempotent claim. |
+
+#### Environment Variables
+
+| Variable | Default | Purpose / Behavior |
+| :--- | :--- | :--- |
+| `REDIS_URL` | `redis://localhost:6379` | Connection URL for Redis / Key-Value service. |
+| `JOBS_ENABLED` | `true` | Enables BullMQ queues and workers (defaults to `false` in Jest unless opted in). |
+| `NO_SHOW_GRACE_SECONDS` | `180` | Number of seconds a called patient has to arrive before being marked `no_show`. |
+| `NEAR_THRESHOLD` | `3` | Patients with `peopleAhead <= NEAR_THRESHOLD` receive "your turn is near" alerts. |
+| `NOTIFY_CHANNELS` | `inapp,log` | Comma-separated active notification channels (`inapp` for WebSockets, `log` for structured console logs). |
+
+#### Redis Outage Resilience & Self-Healing
+1. **Producer Resilience**: Queue producers use `enableOfflineQueue: false` so API requests fail fast and never hang if Redis is offline. Enqueue calls are fire-and-forget inside `try/catch`.
+2. **Startup Grace**: `startJobs()` pings Redis first. If unreachable, it logs ONE warning, leaves the HTTP server running, and retries in the background (15s backing off to 60s), initializing queues and workers once Redis connects.
+3. **Sweeper Healing**: A background sweeper runs every 30 seconds:
+   - Scans MongoDB for `status: 'called'` with `calledAt <= now - grace` and invokes `markNoShow` directly. This requires **zero Redis**.
+   - If Redis wipes its memory or restarts, the sweeper heals overdue tokens and re-dispatches near notifications automatically.
+
+---
+
+### 3. Local Redis & Watching an Auto No-Show
+
+#### Running Redis Locally
+Start Redis with the required `noeviction` memory policy via Docker Compose:
+```bash
+docker compose up -d redis
+```
+
+#### Watching an Auto No-Show in Real Time (with 20s Grace Period)
+Follow these exact steps to see automatic no-show and local notifications in action:
+
+##### Step 1: Start the API server with a 20-second grace period
+- **In PowerShell (Windows)**:
+  ```powershell
+  $env:NO_SHOW_GRACE_SECONDS="20"; npm run dev
+  ```
+- **In Bash (macOS / Linux)**:
+  ```bash
+  NO_SHOW_GRACE_SECONDS=20 npm run dev
+  ```
+
+##### Step 2: In a second terminal, open the CLI watch tool for Patient 1
+- **In PowerShell (Windows)**:
+  ```powershell
+  $PATIENT_JWT = (Invoke-RestMethod -Uri "http://localhost:3000/api/auth/verify-otp" -Method Post -ContentType "application/json" -Body '{"phone":"9999900001","otp":"123456"}').token
+  npm run watch -- $PATIENT_JWT
+  ```
+- **In Bash (macOS / Linux)**:
+  ```bash
+  PATIENT_JWT=$(node -e "
+    const http = require('http');
+    const req = http.request('http://localhost:3000/api/auth/verify-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    }, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => console.log(JSON.parse(data).token));
+    });
+    req.write(JSON.stringify({ phone: '9999900001', otp: '123456' }));
+    req.end();
+  ")
+
+  npm run watch -- $PATIENT_JWT
+  ```
+
+##### Step 3: In a third terminal, have Staff call the next token
+- **In PowerShell (Windows)**:
+  ```powershell
+  $STAFF_JWT = (Invoke-RestMethod -Uri "http://localhost:3000/api/auth/verify-otp" -Method Post -ContentType "application/json" -Body '{"phone":"9999900000","otp":"staffsecret123"}').token
+  $COUNTERS = Invoke-RestMethod -Uri "http://localhost:3000/api/counters" -Headers @{ Authorization = "Bearer $STAFF_JWT" }
+  $COUNTER_ID = $COUNTERS[0].id
+  Invoke-RestMethod -Uri "http://localhost:3000/api/counters/$COUNTER_ID/call-next" -Method Post -Headers @{ Authorization = "Bearer $STAFF_JWT" }
+  ```
+- **In Bash (macOS / Linux)**:
+  ```bash
+  STAFF_JWT=$(node -e "
+    const http = require('http');
+    const req = http.request('http://localhost:3000/api/auth/verify-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    }, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => console.log(JSON.parse(data).token));
+    });
+    req.write(JSON.stringify({ phone: '9999900000', otp: 'staffsecret123' }));
+    req.end();
+  ")
+
+  COUNTER_ID=$(node -e "
+    const http = require('http');
+    const req = http.request('http://localhost:3000/api/counters', {
+      headers: { 'Authorization': 'Bearer ' + process.argv[1] }
+    }, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => console.log(JSON.parse(data)[0].id));
+    });
+    req.end();
+  " "$STAFF_JWT")
+
+  curl -X POST "http://localhost:3000/api/counters/$COUNTER_ID/call-next" \
+    -H "Authorization: Bearer $STAFF_JWT"
+  ```
+
+##### Step 4: Observe the watch terminal
+- Immediate event: `notification:new` with `kind: "called"` and `token:updated` (`status: "called"`).
+- After exactly 20 seconds of inactivity:
+  - Worker triggers `markNoShow`.
+  - Event received: `token:updated` with `status: "no_show"`.
+  - Event received: `notification:new` with `kind: "no_show"`.
+  - The counter is immediately freed to call the next patient.
+

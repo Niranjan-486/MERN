@@ -4,6 +4,7 @@ const queueService = require('../services/queueService');
 const { authenticate, requireRole } = require('../middleware/auth');
 const { validateObjectId } = require('../utils/validators');
 const { getQueueDate } = require('../utils/queueDate');
+const env = require('../config/env');
 const AppError = require('../utils/AppError');
 
 const router = express.Router();
@@ -123,6 +124,20 @@ router.get(
         etaSeconds: etaMap.get(t._id.toString()) ?? null,
       }));
 
+      const isCurCalled = curToken && curToken.status === 'called';
+      const noShowInSec =
+        isCurCalled && curToken.calledAt
+          ? Math.max(
+              0,
+              Math.round(
+                (new Date(curToken.calledAt).getTime() +
+                  (env.NO_SHOW_GRACE_SECONDS || 180) * 1000 -
+                  Date.now()) /
+                  1000
+              )
+            )
+          : null;
+
       const current = curToken
         ? {
             tokenId: curToken._id.toString(),
@@ -130,6 +145,7 @@ router.get(
             status: curToken.status,
             priority: curToken.priority,
             patientName: curToken.userId ? curToken.userId.name : '',
+            noShowInSec,
           }
         : null;
 

@@ -26,6 +26,22 @@ const env = {
   MONGODB_URI: rawMongoUri || (isTest ? 'mongodb://localhost:27017/smartqueue_test' : ''),
   MONGO_URI: rawMongoUri || (isTest ? 'mongodb://localhost:27017/smartqueue_test' : ''),
   REDIS_URL: process.env.REDIS_URL || 'redis://localhost:6379',
+  NO_SHOW_GRACE_SECONDS:
+    process.env.NO_SHOW_GRACE_SECONDS !== undefined
+      ? parseInt(process.env.NO_SHOW_GRACE_SECONDS, 10)
+      : 180,
+  NEAR_THRESHOLD:
+    process.env.NEAR_THRESHOLD !== undefined
+      ? parseInt(process.env.NEAR_THRESHOLD, 10)
+      : 3,
+  NOTIFY_CHANNELS: (process.env.NOTIFY_CHANNELS || 'inapp,log')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean),
+  JOBS_ENABLED:
+    process.env.JOBS_ENABLED !== undefined
+      ? process.env.JOBS_ENABLED === 'true'
+      : !isTest,
   TIMEZONE: process.env.TIMEZONE || 'Asia/Kolkata',
   JWT_SECRET:
     process.env.JWT_SECRET ||

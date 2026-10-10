@@ -11,6 +11,8 @@ export function PatientHome() {
 
   const [services, setServices] = useState([]);
   const [tokens, setTokens] = useState([]);
+  const [notifications, setNotifications] = useState([]);
+  const [activeToast, setActiveToast] = useState(null);
   const [nowServingByService, setNowServingByService] = useState({});
   const [loading, setLoading] = useState(true);
   const [joiningServiceId, setJoiningServiceId] = useState(null);
@@ -27,13 +29,15 @@ export function PatientHome() {
   const loadInitialData = useCallback(async () => {
     try {
       setError(null);
-      const [servicesData, activeTokensData] = await Promise.all([
+      const [servicesData, activeTokensData, notifsData] = await Promise.all([
         api.get('/api/services'),
         api.get('/api/me/tokens/active'),
+        api.get('/api/me/notifications'),
       ]);
 
       setServices(Array.isArray(servicesData) ? servicesData : []);
       setTokens(Array.isArray(activeTokensData) ? activeTokensData : []);
+      setNotifications(Array.isArray(notifsData) ? notifsData : []);
     } catch (err) {
       setError(getFriendlyErrorMessage(err));
     } finally {
@@ -45,16 +49,20 @@ export function PatientHome() {
     loadInitialData();
   }, [loadInitialData]);
 
-  // Resync logic: refetches active tokens and resolves any previously active token that disappeared
+  // Resync logic: refetches active tokens, services, and notifications
   const resync = useCallback(async () => {
     try {
-      const [servicesData, activeTokens] = await Promise.all([
+      const [servicesData, activeTokens, notifsData] = await Promise.all([
         api.get('/api/services'),
         api.get('/api/me/tokens/active'),
+        api.get('/api/me/notifications'),
       ]);
 
       if (Array.isArray(servicesData)) {
         setServices(servicesData);
+      }
+      if (Array.isArray(notifsData)) {
+        setNotifications(notifsData);
       }
 
       const activeList = Array.isArray(activeTokens) ? activeTokens : [];
@@ -78,9 +86,10 @@ export function PatientHome() {
               priority: resolved.priority,
               peopleAhead: null,
               counterName: null,
+              etaSeconds: null,
+              noShowInSec: null,
             });
           } catch (_) {
-            // If fetch fails, retain previous with terminal assumption or keep state
             resolvedTokens.push(prev);
           }
         }
@@ -111,6 +120,15 @@ export function PatientHome() {
     };
   }, [resync]);
 
+  // Auto-dismiss active notification toast after 6 seconds
+  useEffect(() => {
+    if (!activeToast) return;
+    const timer = setTimeout(() => {
+      setActiveToast(null);
+    }, 6000);
+    return () => clearTimeout(timer);
+  }, [activeToast]);
+
   // Real-time subscriptions
   useEffect(() => {
     // 1. token:updated replaces that token's state
@@ -131,13 +149,11 @@ export function PatientHome() {
     const unsubQueue = subscribe('queue:updated', (payload) => {
       if (!payload || !payload.serviceId) return;
 
-      // Update now-serving line
       setNowServingByService((prev) => ({
         ...prev,
         [payload.serviceId]: payload.nowServing || [],
       }));
 
-      // Update service waitingCount
       setServices((prev) =>
         prev.map((s) =>
           s.id === payload.serviceId ? { ...s, waitingCount: payload.waitingCount } : s
@@ -145,9 +161,17 @@ export function PatientHome() {
       );
     });
 
+    // 3. notification:new displays a toast banner and updates recent list
+    const unsubNotif = subscribe('notification:new', (payload) => {
+      if (!payload || !payload.id) return;
+      setActiveToast(payload);
+      setNotifications((prev) => [payload, ...prev.filter((n) => n.id !== payload.id)]);
+    });
+
     return () => {
       unsubToken();
       unsubQueue();
+      unsubNotif();
     };
   }, [subscribe]);
 
@@ -159,7 +183,6 @@ export function PatientHome() {
       const res = await api.post(`/api/services/${serviceId}/tokens`, {});
       const newToken = res.token;
 
-      // Show token card immediately from API response
       const immediateCard = {
         tokenId: newToken._id,
         serviceId: newToken.serviceId,
@@ -168,6 +191,8 @@ export function PatientHome() {
         priority: newToken.priority,
         peopleAhead: 0,
         counterName: null,
+        etaSeconds: null,
+        noShowInSec: null,
       };
 
       setTokens((prev) => [
@@ -175,7 +200,6 @@ export function PatientHome() {
         ...prev.filter((t) => t.tokenId !== newToken._id && t.serviceId !== serviceId),
       ]);
 
-      // Refetch services to refresh count
       const updatedServices = await api.get('/api/services');
       if (Array.isArray(updatedServices)) {
         setServices(updatedServices);
@@ -197,7 +221,7 @@ export function PatientHome() {
       setTokens((prev) =>
         prev.map((t) =>
           t.tokenId === token.tokenId
-            ? { ...t, status: 'cancelled', peopleAhead: null }
+            ? { ...t, status: 'cancelled', peopleAhead: null, noShowInSec: null }
             : t
         )
       );
@@ -233,6 +257,62 @@ export function PatientHome() {
 
   return (
     <div className="patient-layout">
+      {/* Toast Banner for live notifications */}
+      {activeToast && (
+        <aside
+          className={`toast-banner toast-${activeToast.kind}`}
+          role="status"
+          aria-live="polite"
+          style={{
+            position: 'fixed',
+            top: '1rem',
+            right: '1rem',
+            zIndex: 1000,
+            maxWidth: '380px',
+            padding: '1rem',
+            backgroundColor: activeToast.kind === 'no_show' ? '#fff5f5' : '#f0fff4',
+            border: `1px solid ${activeToast.kind === 'no_show' ? '#feb2b2' : '#9ae6b4'}`,
+            borderRadius: '8px',
+            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'flex-start',
+            gap: '0.75rem',
+          }}
+        >
+          <div className="toast-content">
+            <strong
+              style={{
+                display: 'block',
+                color: activeToast.kind === 'no_show' ? '#9b2c2c' : '#22543d',
+                marginBottom: '0.25rem',
+              }}
+            >
+              {activeToast.title}
+            </strong>
+            <p style={{ margin: 0, fontSize: '0.9rem', color: '#2d3748' }}>
+              {activeToast.body}
+            </p>
+          </div>
+          <button
+            type="button"
+            className="toast-close"
+            onClick={() => setActiveToast(null)}
+            aria-label="Dismiss notification"
+            style={{
+              background: 'none',
+              border: 'none',
+              fontSize: '1.25rem',
+              cursor: 'pointer',
+              color: '#718096',
+              lineHeight: 1,
+            }}
+          >
+            ×
+          </button>
+        </aside>
+      )}
+
       <header className="app-navbar">
         <div className="navbar-brand">⚡ SmartQueue</div>
         <div className="navbar-user">
@@ -288,6 +368,82 @@ export function PatientHome() {
             </div>
           )}
         </section>
+
+        {/* Recent Updates Section */}
+        {notifications.length > 0 && (
+          <section
+            className="patient-notifications-section"
+            aria-label="Recent updates"
+            style={{ marginTop: '2rem' }}
+          >
+            <h2 className="section-title">Recent Updates</h2>
+            <div
+              className="notifications-list"
+              style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}
+            >
+              {notifications.slice(0, 5).map((n) => (
+                <article
+                  key={n.id}
+                  className={`notification-card kind-${n.kind}`}
+                  style={{
+                    padding: '0.875rem 1rem',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '6px',
+                    backgroundColor: '#ffffff',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      marginBottom: '0.35rem',
+                    }}
+                  >
+                    <span
+                      className={`badge badge-${n.kind}`}
+                      style={{
+                        padding: '0.2rem 0.5rem',
+                        fontSize: '0.75rem',
+                        fontWeight: 'bold',
+                        borderRadius: '4px',
+                        textTransform: 'uppercase',
+                        backgroundColor:
+                          n.kind === 'near'
+                            ? '#feebc8'
+                            : n.kind === 'called'
+                            ? '#c6f6d5'
+                            : '#fed7d7',
+                        color:
+                          n.kind === 'near'
+                            ? '#7b341e'
+                            : n.kind === 'called'
+                            ? '#22543d'
+                            : '#742a2a',
+                      }}
+                    >
+                      {n.kind === 'no_show' ? 'No Show' : n.kind}
+                    </span>
+                    <span style={{ fontSize: '0.8rem', color: '#718096' }}>
+                      {n.createdAt
+                        ? new Date(n.createdAt).toLocaleTimeString([], {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })
+                        : ''}
+                    </span>
+                  </div>
+                  <h4 style={{ margin: '0 0 0.25rem 0', fontSize: '0.95rem' }}>
+                    {n.title}
+                  </h4>
+                  <p style={{ margin: 0, fontSize: '0.875rem', color: '#4a5568' }}>
+                    {n.body}
+                  </p>
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* Available Services Section */}
         <section className="patient-services-section" aria-label="Available Services">

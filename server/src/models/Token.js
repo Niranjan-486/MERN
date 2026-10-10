@@ -76,4 +76,7 @@ tokenSchema.index({
   number: 1,
 });
 
+// 5. Sweeper index: finds called tokens past grace period for automatic no-show recovery
+tokenSchema.index({ status: 1, calledAt: 1 });
+
 module.exports = mongoose.model('Token', tokenSchema);

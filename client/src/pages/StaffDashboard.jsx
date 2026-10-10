@@ -5,6 +5,27 @@ import { api } from '../lib/api';
 import { getFriendlyErrorMessage } from '../lib/errors';
 import { createCoalescedRunner } from '../lib/coalescedRunner';
 import { formatEta } from '../lib/formatEta';
+import { formatCountdown } from '../lib/formatCountdown';
+
+function StaffCountdown({ noShowInSec }) {
+  const [seconds, setSeconds] = useState(noShowInSec);
+
+  useEffect(() => {
+    setSeconds(noShowInSec);
+    if (noShowInSec == null) return;
+    const interval = setInterval(() => {
+      setSeconds((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [noShowInSec]);
+
+  if (seconds == null) return null;
+  return (
+    <p className="current-countdown" style={{ margin: '0.25rem 0', color: '#c05621', fontSize: '0.9rem' }}>
+      Auto no-show in <strong>{formatCountdown(seconds)}</strong>
+    </p>
+  );
+}
 
 export function StaffDashboard() {
   const { user, logout } = useAuth();
@@ -293,6 +314,9 @@ export function StaffDashboard() {
                   <p className="current-patient-name">
                     Patient: <strong>{dashboard.current.patientName || 'Anonymous'}</strong>
                   </p>
+                  {dashboard.current.status === 'called' && (
+                    <StaffCountdown noShowInSec={dashboard.current.noShowInSec} />
+                  )}
 
                   <div className="current-actions">
                     {dashboard.current.status === 'called' && (

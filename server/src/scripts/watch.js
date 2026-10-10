@@ -26,6 +26,10 @@ socket.on('queue:updated', (data) => {
   console.log('[EVENT queue:updated]:', JSON.stringify(data, null, 2));
 });
 
+socket.on('notification:new', (data) => {
+  console.log('[EVENT notification:new]:', JSON.stringify(data, null, 2));
+});
+
 socket.on('connect_error', (err) => {
   console.error('[ERROR] Connection refused:', err.message);
 });

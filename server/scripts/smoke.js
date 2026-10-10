@@ -90,14 +90,18 @@ async function main() {
       process.exit(1);
     }
 
-    // Check readiness (database connectivity)
+    // Check readiness (database and redis connectivity)
     try {
       const readyRes = await requestJson(`${apiUrl}/ready`);
       if (!readyRes.ok || readyRes.data?.mongo !== 'connected') {
         console.error(`  [FAIL] GET /ready reported database not ready:`, readyRes.data);
         process.exit(1);
       }
-      console.log('  [PASS] GET /ready confirmed MongoDB connection is active');
+      if (readyRes.data?.redis !== 'up') {
+        console.error(`  [FAIL] GET /ready reported Redis not up:`, readyRes.data);
+        process.exit(1);
+      }
+      console.log('  [PASS] GET /ready confirmed MongoDB connection is active and Redis is up');
     } catch (err) {
       console.error(`  [FAIL] GET /ready request error:`, err.message);
       process.exit(1);
@@ -208,6 +212,25 @@ async function main() {
       });
     });
 
+    let resolveNearNotif;
+    const nearNotifPromise = new Promise((resolve) => {
+      resolveNearNotif = resolve;
+    });
+
+    let resolveCalledNotif;
+    const calledNotifPromise = new Promise((resolve) => {
+      resolveCalledNotif = resolve;
+    });
+
+    socket.on('notification:new', (evt) => {
+      console.log(`  [Socket Event] notification:new -> kind: "${evt.kind}", title: "${evt.title}"`);
+      if (evt.kind === 'near') {
+        resolveNearNotif(true);
+      } else if (evt.kind === 'called') {
+        resolveCalledNotif(true);
+      }
+    });
+
     // Patient joins queue
     const joinRes = await requestJson(`${apiUrl}/api/services/${service.id}/tokens`, {
       method: 'POST',
@@ -223,6 +246,18 @@ async function main() {
     const tokenDoc = joinRes.data.token;
     createdTokenId = tokenDoc._id || tokenDoc.id;
     console.log(`  [PASS] Patient joined queue: Token #${tokenDoc.number} (ID: ${createdTokenId})`);
+
+    // Wait for "near" notification
+    console.log('  Waiting up to 10s for patient "near" notification:new event...');
+    const nearTimeout = setTimeout(() => resolveNearNotif(false), 10000);
+    const gotNear = await nearNotifPromise;
+    clearTimeout(nearTimeout);
+
+    if (!gotNear) {
+      console.error('  [FAIL] Did not receive "near" notification:new event');
+      process.exit(1);
+    }
+    console.log('  [PASS] Patient Socket.io received "near" notification:new');
 
     // Attach listener for this token
     socket.on('token:updated', (evt) => {
@@ -267,6 +302,18 @@ async function main() {
       process.exit(1);
     }
     console.log(`  [PASS] Staff called next token: #${callRes.data.token.number} (Status: CALLED)`);
+
+    // Wait for "called" notification
+    console.log('  Waiting up to 10s for patient "called" notification:new event...');
+    const calledTimeout = setTimeout(() => resolveCalledNotif(false), 10000);
+    const gotCalled = await calledNotifPromise;
+    clearTimeout(calledTimeout);
+
+    if (!gotCalled) {
+      console.error('  [FAIL] Did not receive "called" notification:new event');
+      process.exit(1);
+    }
+    console.log('  [PASS] Patient Socket.io received "called" notification:new');
 
     // Staff starts consultation
     const startRes = await requestJson(`${apiUrl}/api/tokens/${createdTokenId}/start`, {

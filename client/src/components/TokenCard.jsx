@@ -1,5 +1,26 @@
-import React, { useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { formatEta } from '../lib/formatEta';
+import { formatCountdown } from '../lib/formatCountdown';
+
+function TokenCountdown({ noShowInSec }) {
+  const [seconds, setSeconds] = useState(noShowInSec);
+
+  useEffect(() => {
+    setSeconds(noShowInSec);
+    if (noShowInSec == null) return;
+    const interval = setInterval(() => {
+      setSeconds((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [noShowInSec]);
+
+  if (seconds == null) return null;
+  return (
+    <div className="countdown-text" style={{ marginTop: '0.35rem', fontSize: '0.9rem' }}>
+      Auto no-show in <strong>{formatCountdown(seconds)}</strong>
+    </div>
+  );
+}
 
 /**
  * TokenCard: renders the current state of a patient's token.
@@ -104,6 +125,7 @@ export function TokenCard({
           {status === 'called' && (
             <aside className="called-banner" role="alert">
               <strong>Your turn! Please go to {counterName || 'assigned counter'}</strong>
+              <TokenCountdown noShowInSec={token.noShowInSec} />
             </aside>
           )}
 
