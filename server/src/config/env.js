@@ -1,8 +1,10 @@
 const dotenv = require('dotenv');
 const path = require('path');
 
-// Load .env from server/ root
+// Load .env from server/ root or current working directory
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+dotenv.config();
 
 const isTest = process.env.NODE_ENV === 'test';
 
@@ -14,15 +16,15 @@ const clientOrigins = rawOrigins
       .filter(Boolean)
   : [];
 
+// MONGODB_URI takes precedence over MONGO_URI.
+// Never silently fall back to localhost in non-test environments.
+const rawMongoUri = process.env.MONGODB_URI || process.env.MONGO_URI || '';
+
 const env = {
   NODE_ENV: process.env.NODE_ENV || 'development',
   PORT: parseInt(process.env.PORT, 10) || 10000,
-  MONGO_URI:
-    process.env.MONGO_URI ||
-    process.env.MONGODB_URI ||
-    (isTest
-      ? 'mongodb://localhost:27017/smartqueue_test'
-      : 'mongodb://localhost:27017/smartqueue'),
+  MONGODB_URI: rawMongoUri || (isTest ? 'mongodb://localhost:27017/smartqueue_test' : ''),
+  MONGO_URI: rawMongoUri || (isTest ? 'mongodb://localhost:27017/smartqueue_test' : ''),
   REDIS_URL: process.env.REDIS_URL || 'redis://localhost:6379',
   TIMEZONE: process.env.TIMEZONE || 'Asia/Kolkata',
   JWT_SECRET:
@@ -46,6 +48,9 @@ if (!env.STAFF_OTP_CODE || env.STAFF_OTP_CODE.length < 8) {
 }
 if (clientOrigins.length === 0) {
   throw new Error('Config error: CLIENT_ORIGIN is required');
+}
+if (!isTest && !env.MONGODB_URI) {
+  throw new Error('Config error: MONGODB_URI is required. Please set MONGODB_URI (or MONGO_URI).');
 }
 
 module.exports = env;

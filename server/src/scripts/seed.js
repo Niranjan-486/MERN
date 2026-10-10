@@ -1,10 +1,33 @@
+const path = require('path');
+const dotenv = require('dotenv');
+
+// Load .env from server/ root and current working directory
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+dotenv.config();
+
 const mongoose = require('mongoose');
+const env = require('../config/env');
 const { connectDB } = require('../config/db');
 const { Organization, Service, Counter, User, Token } = require('../models');
 
 async function seed() {
   try {
-    await connectDB();
+    const mongoUri =
+      process.env.MONGODB_URI ||
+      process.env.MONGO_URI ||
+      env.MONGODB_URI ||
+      env.MONGO_URI;
+
+    if (!mongoUri) {
+      console.error(
+        '\n[ERROR] Seed aborted: MONGODB_URI environment variable is missing.\n' +
+        'Please set MONGODB_URI in your environment or .env file before running seed.\n'
+      );
+      process.exit(1);
+    }
+
+    await connectDB(mongoUri);
 
     const host = mongoose.connection.host || 'unknown';
     const dbName = mongoose.connection.name || 'unknown';
@@ -130,8 +153,14 @@ async function seed() {
     await mongoose.connection.close();
     process.exit(0);
   } catch (err) {
-    console.error('Seed failed:', err);
-    await mongoose.connection.close();
+    const safeMsg = (err.message || String(err)).replace(
+      /(mongodb(?:\+srv)?:\/\/)([^:@\s]+):([^@\s]+)@/g,
+      '$1***:***@'
+    );
+    console.error('Seed failed:', safeMsg);
+    try {
+      await mongoose.connection.close();
+    } catch (_) {}
     process.exit(1);
   }
 }

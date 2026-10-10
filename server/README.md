@@ -195,10 +195,11 @@ The CLI watcher authenticates over Socket.io, receives initial active room subsc
        "status": "called",
        "priority": 0,
        "peopleAhead": null,
-       "counterName": "Counter 1"
+       "counterName": "Counter 1",
+       "etaSeconds": null
      }
      ```
-     *(Note: `peopleAhead` is an integer while `waiting`, `null` otherwise. `counterName` is present while `called` or `serving`, `null` otherwise).*
+     *(Note: `peopleAhead` is an integer while `waiting`, `null` otherwise. `counterName` is present while `called` or `serving`, `null` otherwise. `etaSeconds` is an integer while `waiting`, `null` otherwise).*
    - `queue:updated` (emitted to `service:{serviceId}`):
      ```json
      {

@@ -143,6 +143,7 @@ function createRealtime(httpServer) {
               priority: t.priority,
               peopleAhead: i, // Index in sorted waiting array is exact count of people ahead
               counterName: null,
+              etaSeconds: t.etaSeconds !== undefined ? t.etaSeconds : null,
             };
             io.to(`user:${t.userId.toString()}`).emit('token:updated', payload);
           }
@@ -160,6 +161,7 @@ function createRealtime(httpServer) {
               priority: t.priority,
               peopleAhead: null,
               counterName: (t.counterId && t.counterId.name) || null,
+              etaSeconds: null,
             };
             io.to(`user:${t.userId.toString()}`).emit('token:updated', payload);
           }
@@ -177,6 +179,7 @@ function createRealtime(httpServer) {
                 priority: t.priority,
                 peopleAhead: null,
                 counterName: (t.counterId && t.counterId.name) || null,
+                etaSeconds: null,
               };
               io.to(`user:${t.userId.toString()}`).emit('token:updated', payload);
             }

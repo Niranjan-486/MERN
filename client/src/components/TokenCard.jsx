@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { formatEta } from '../lib/formatEta';
 
 /**
  * TokenCard: renders the current state of a patient's token.
@@ -36,6 +37,13 @@ export function TokenCard({
 
   const canCancel = status === 'waiting' || status === 'called';
   const isTerminal = ['completed', 'skipped', 'no_show', 'cancelled'].includes(status);
+
+  const etaFormatted = formatEta(token.etaSeconds);
+  const estimatedWaitText = etaFormatted
+    ? etaFormatted === 'less than a minute'
+      ? 'less than a minute'
+      : `about ${etaFormatted}`
+    : null;
 
   const getStatusBadgeClass = () => {
     switch (status) {
@@ -81,9 +89,16 @@ export function TokenCard({
         {/* Live status message with polite screen reader announcement */}
         <div className="token-status-message" aria-live="polite">
           {status === 'waiting' && (
-            <p className="status-text waiting-text">
-              People ahead of you: <strong>{peopleAhead ?? 0}</strong>
-            </p>
+            <>
+              <p className="status-text waiting-text">
+                People ahead of you: <strong>{peopleAhead ?? 0}</strong>
+              </p>
+              {estimatedWaitText && (
+                <p className="status-text eta-text">
+                  Estimated wait: <strong>{estimatedWaitText}</strong>
+                </p>
+              )}
+            </>
           )}
 
           {status === 'called' && (

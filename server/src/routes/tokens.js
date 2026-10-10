@@ -58,6 +58,7 @@ router.get('/:tokenId', authenticate, async (req, res, next) => {
     res.status(200).json({
       token: result.token,
       peopleAhead: result.peopleAhead,
+      etaSeconds: result.etaSeconds,
     });
   } catch (err) {
     next(err);

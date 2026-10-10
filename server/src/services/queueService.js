@@ -6,6 +6,7 @@ const {
 } = require('./tokenStateMachine');
 const { getQueueDate } = require('../utils/queueDate');
 const { publishTokenChanged } = require('../events/eventBus');
+const { computeEtas } = require('./etaService');
 const AppError = require('../utils/AppError');
 
 /**
@@ -194,7 +195,9 @@ async function joinQueue({ serviceId, userId, priority = 0 }) {
 }
 
 /**
- * Get token status and number of waiting people ahead of it.
+ * Get token status, number of waiting people ahead of it, and etaSeconds.
+ * For waiting tokens, uses getQueueSnapshot so snapshot ETAs and getTokenStatus ETAs
+ * are guaranteed to agree.
  */
 async function getTokenStatus(tokenId) {
   const token = await Token.findById(tokenId);
@@ -203,23 +206,42 @@ async function getTokenStatus(tokenId) {
   }
 
   let peopleAhead = 0;
+  let etaSeconds = null;
+
   if (token.status === 'waiting') {
-    peopleAhead = await Token.countDocuments({
-      serviceId: token.serviceId,
-      queueDate: token.queueDate,
-      status: 'waiting',
-      $or: [
-        { priority: { $gt: token.priority } },
-        { priority: token.priority, number: { $lt: token.number } },
-      ],
-    });
+    const snapshot = await getQueueSnapshot(token.serviceId, token.queueDate);
+    const waitingList = snapshot.waitingTokens;
+    const tokenIndex = waitingList.findIndex(
+      (t) => (t._id || t.id).toString() === token._id.toString()
+    );
+
+    if (tokenIndex !== -1) {
+      peopleAhead = tokenIndex;
+      etaSeconds = waitingList[tokenIndex].etaSeconds ?? null;
+    } else {
+      peopleAhead = await Token.countDocuments({
+        serviceId: token.serviceId,
+        queueDate: token.queueDate,
+        status: 'waiting',
+        $or: [
+          { priority: { $gt: token.priority } },
+          { priority: token.priority, number: { $lt: token.number } },
+        ],
+      });
+      etaSeconds = null;
+    }
   }
 
-  const tokenObj = token.toObject();
+  const tokenObj = {
+    ...token.toObject(),
+    etaSeconds,
+  };
+
   return {
     ...tokenObj,
     token: tokenObj,
     peopleAhead,
+    etaSeconds,
   };
 }
 
@@ -312,16 +334,100 @@ async function startServing({ tokenId, counterId }) {
 }
 
 /**
+ * Updates Service.avgServiceTimeSec and serviceSamples using ONE atomic
+ * aggregation-pipeline update (no read-then-write race).
+ *
+ * Rules:
+ * - sample: completedAt - servingAt in seconds.
+ * - sample < 10 s: ignored completely (no change to avg or samples).
+ * - cap sample at 3x current average (prevents forgotten Complete click from wrecking estimates).
+ * - weight = max(0.2, 1 / (serviceSamples + 2)) (fast warm-up, then EWMA).
+ * - avg = avg * (1 - weight) + sample * weight.
+ * - serviceSamples += 1.
+ */
+async function updateServiceAvgEWMA(serviceId, sample) {
+  if (typeof sample !== 'number' || sample < 10) {
+    return;
+  }
+
+  await Service.updateOne(
+    { _id: serviceId },
+    [
+      {
+        $set: {
+          avgServiceTimeSec: {
+            $let: {
+              vars: {
+                currentAvg: { $ifNull: ['$avgServiceTimeSec', 300] },
+                currentSamples: { $ifNull: ['$serviceSamples', 0] },
+              },
+              in: {
+                $let: {
+                  vars: {
+                    cappedSample: {
+                      $min: [
+                        sample,
+                        { $multiply: [3, '$$currentAvg'] },
+                      ],
+                    },
+                    weight: {
+                      $max: [
+                        0.2,
+                        { $divide: [1, { $add: ['$$currentSamples', 2] }] },
+                      ],
+                    },
+                  },
+                  in: {
+                    $add: [
+                      {
+                        $multiply: [
+                          '$$currentAvg',
+                          { $subtract: [1, '$$weight'] },
+                        ],
+                      },
+                      {
+                        $multiply: ['$$cappedSample', '$$weight'],
+                      },
+                    ],
+                  },
+                },
+              },
+            },
+          },
+          serviceSamples: {
+            $add: [{ $ifNull: ['$serviceSamples', 0] }, 1],
+          },
+        },
+      },
+    ]
+  );
+}
+
+/**
  * Complete a serving token: serving -> completed
  */
 async function completeToken({ tokenId, counterId }) {
-  return transitionToken({
+  const completedAt = new Date();
+  const token = await transitionToken({
     tokenId,
     expectedStatuses: ['serving'],
     nextStatus: 'completed',
     counterId,
-    updateFields: { completedAt: new Date() },
+    updateFields: { completedAt },
   });
+
+  // Track service-time sample if servingAt was recorded
+  if (token && token.servingAt) {
+    const sample = Math.round(
+      (new Date(token.completedAt || completedAt).getTime() - new Date(token.servingAt).getTime()) / 1000
+    );
+    // Ignore samples under 10s (no change at all)
+    if (sample >= 10) {
+      await updateServiceAvgEWMA(token.serviceId, sample);
+    }
+  }
+
+  return token;
 }
 
 /**
@@ -350,11 +456,14 @@ async function cancelToken({ tokenId, userId }) {
 
 /**
  * Read-only queue snapshot for a service on a given queueDate.
- * Runs two queries: one for waiting tokens (sorted by priority desc, number asc),
- * and one for called/serving tokens (populated with counter details).
+ * 1. Reads waiting tokens in call order (priority desc, number asc).
+ * 2. Reads called/serving tokens with populated counter details.
+ * 3. Reads Service document to get avgServiceTimeSec.
+ * 4. Reads active counters and matches them with their held tokens (including servingAt).
+ * 5. Calls pure computeEtas once for the entire waiting list.
  */
 async function getQueueSnapshot(serviceId, queueDate = getQueueDate()) {
-  const [waitingTokens, activeTokens] = await Promise.all([
+  const [waitingTokens, activeTokens, service, activeCounters] = await Promise.all([
     Token.find({
       serviceId,
       queueDate,
@@ -365,6 +474,8 @@ async function getQueueSnapshot(serviceId, queueDate = getQueueDate()) {
       queueDate,
       status: { $in: ['called', 'serving'] },
     }).populate('counterId', 'name'),
+    Service.findById(serviceId),
+    Counter.find({ serviceId, status: 'active' }),
   ]);
 
   const nowServing = activeTokens.map((t) => ({
@@ -374,13 +485,54 @@ async function getQueueSnapshot(serviceId, queueDate = getQueueDate()) {
     status: t.status,
   }));
 
+  // Map each active counter to the token it currently holds (with servingAt/calledAt)
+  const tokenByCounterId = new Map();
+  for (const t of activeTokens) {
+    if (t.counterId) {
+      const cId = (t.counterId._id || t.counterId).toString();
+      tokenByCounterId.set(cId, t);
+    }
+  }
+
+  const simulatedCounters = activeCounters.map((c) => {
+    const heldToken = tokenByCounterId.get(c._id.toString());
+    return {
+      id: c._id.toString(),
+      status: c.status,
+      currentToken: heldToken
+        ? {
+            status: heldToken.status,
+            servingAt: heldToken.servingAt,
+            calledAt: heldToken.calledAt,
+          }
+        : null,
+    };
+  });
+
+  const avgServiceSec = (service && service.avgServiceTimeSec) || 300;
+  const etas = computeEtas({
+    now: new Date(),
+    waiting: waitingTokens,
+    counters: simulatedCounters,
+    avgServiceSec,
+  });
+
+  // Attach etaSeconds to each waiting token
+  const waitingTokensWithEta = waitingTokens.map((t, idx) => {
+    const doc = t.toObject ? t.toObject() : { ...t };
+    doc.etaSeconds = etas[idx] !== undefined ? etas[idx] : null;
+    return doc;
+  });
+
   return {
     serviceId: serviceId.toString(),
     queueDate,
     waitingCount: waitingTokens.length,
+    avgServiceSec,
     nowServing,
-    waitingTokens,
+    waitingTokens: waitingTokensWithEta,
     activeTokens,
+    etas,
   };
 }
 
@@ -394,4 +546,5 @@ module.exports = {
   cancelToken,
   transitionToken,
   getQueueSnapshot,
+  updateServiceAvgEWMA,
 };

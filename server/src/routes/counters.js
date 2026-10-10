@@ -110,11 +110,17 @@ router.get(
         .limit(20)
         .populate('userId', 'name');
 
+      const etaMap = new Map();
+      for (const t of snapshot.waitingTokens) {
+        etaMap.set((t._id || t.id).toString(), t.etaSeconds);
+      }
+
       const waiting = waitingDocs.map((t) => ({
         tokenId: t._id.toString(),
         number: t.number,
         priority: t.priority,
         patientName: t.userId ? t.userId.name : '',
+        etaSeconds: etaMap.get(t._id.toString()) ?? null,
       }));
 
       const current = curToken
@@ -137,6 +143,7 @@ router.get(
         service: {
           id: counter.serviceId._id.toString(),
           name: counter.serviceId.name,
+          avgServiceSec: Math.round(counter.serviceId.avgServiceTimeSec || 300),
         },
         current,
         waitingCount: snapshot.waitingCount,

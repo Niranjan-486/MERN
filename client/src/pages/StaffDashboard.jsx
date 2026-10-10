@@ -4,6 +4,7 @@ import { useSocket } from '../realtime/SocketProvider';
 import { api } from '../lib/api';
 import { getFriendlyErrorMessage } from '../lib/errors';
 import { createCoalescedRunner } from '../lib/coalescedRunner';
+import { formatEta } from '../lib/formatEta';
 
 export function StaffDashboard() {
   const { user, logout } = useAuth();
@@ -204,6 +205,12 @@ export function StaffDashboard() {
             {connectionStatus === 'live' ? 'Live' : 'Reconnecting...'}
           </span>
 
+          {dashboard?.service?.avgServiceSec != null && (
+            <span className="navbar-avg-service">
+              Avg service time: {Math.round(dashboard.service.avgServiceSec / 60)} min
+            </span>
+          )}
+
           <span className="user-greeting">{user?.name || 'Staff'}</span>
           <button
             type="button"
@@ -238,6 +245,11 @@ export function StaffDashboard() {
                 <h1 className="desk-title">{dashboard?.counter?.name || 'Counter'}</h1>
                 <p className="desk-service">
                   Service: <strong>{dashboard?.service?.name || 'General OPD'}</strong>
+                  {dashboard?.service?.avgServiceSec != null && (
+                    <span className="avg-service-time">
+                      {' '}• Avg service time: {Math.round(dashboard.service.avgServiceSec / 60)} min
+                    </span>
+                  )}
                 </p>
               </div>
 
@@ -346,6 +358,7 @@ export function StaffDashboard() {
                         <th>Token</th>
                         <th>Patient Name</th>
                         <th>Priority</th>
+                        <th>Est. Wait</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -365,6 +378,7 @@ export function StaffDashboard() {
                               <span className="priority-tag normal">Normal</span>
                             )}
                           </td>
+                          <td>{formatEta(t.etaSeconds) || '—'}</td>
                         </tr>
                       ))}
                     </tbody>

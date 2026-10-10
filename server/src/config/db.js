@@ -5,16 +5,25 @@ const env = require('./env');
  * Connect to MongoDB. Returns the mongoose connection promise.
  * Mongoose buffers commands until connected, so models work immediately.
  */
-async function connectDB() {
+async function connectDB(customUri) {
+  const uri = customUri || env.MONGODB_URI || env.MONGO_URI;
+  if (!uri) {
+    console.error('MongoDB initial connection failed: MONGODB_URI is required but was not provided.');
+    process.exit(1);
+  }
   try {
-    await mongoose.connect(env.MONGO_URI, {
+    await mongoose.connect(uri, {
       serverSelectionTimeoutMS: 10000,
     });
     const host = mongoose.connection.host || 'unknown';
     const dbName = mongoose.connection.name || 'unknown';
     console.log(`MongoDB connected to host: ${host}, database: ${dbName}`);
   } catch (err) {
-    console.error(`MongoDB initial connection failed: ${err.message}`);
+    const safeMsg = (err.message || '').replace(
+      /(mongodb(?:\+srv)?:\/\/)([^:@\s]+):([^@\s]+)@/g,
+      '$1***:***@'
+    );
+    console.error(`MongoDB initial connection failed: ${safeMsg}`);
     process.exit(1);
   }
 }

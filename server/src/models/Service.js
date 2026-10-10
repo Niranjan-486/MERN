@@ -10,6 +10,7 @@ const serviceSchema = new mongoose.Schema(
     },
     name: { type: String, required: true, trim: true },
     avgServiceTimeSec: { type: Number, default: 300 },
+    serviceSamples: { type: Number, default: 0 },
     isActive: { type: Boolean, default: true },
   },
   { timestamps: true }

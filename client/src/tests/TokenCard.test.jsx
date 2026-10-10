@@ -157,4 +157,60 @@ describe('TokenCard Status Rendering', () => {
     expect(screen.getByText(/Your token was cancelled\./i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /join again/i })).toBeInTheDocument();
   });
+
+  test('renders Estimated wait: about N min when etaSeconds is provided', () => {
+    const token = {
+      ...baseToken,
+      status: 'waiting',
+      peopleAhead: 2,
+      etaSeconds: 300,
+    };
+    render(
+      <TokenCard
+        token={token}
+        serviceName="General OPD"
+        nowServingSummary="None"
+      />
+    );
+
+    expect(screen.getByText(/Estimated wait:/i)).toBeInTheDocument();
+    expect(screen.getByText(/about 5 min/i)).toBeInTheDocument();
+  });
+
+  test('renders Estimated wait: less than a minute when etaSeconds < 60', () => {
+    const token = {
+      ...baseToken,
+      status: 'waiting',
+      peopleAhead: 0,
+      etaSeconds: 45,
+    };
+    render(
+      <TokenCard
+        token={token}
+        serviceName="General OPD"
+        nowServingSummary="None"
+      />
+    );
+
+    expect(screen.getByText(/Estimated wait:/i)).toBeInTheDocument();
+    expect(screen.getByText(/less than a minute/i)).toBeInTheDocument();
+  });
+
+  test('hides Estimated wait when etaSeconds is null', () => {
+    const token = {
+      ...baseToken,
+      status: 'waiting',
+      peopleAhead: 0,
+      etaSeconds: null,
+    };
+    render(
+      <TokenCard
+        token={token}
+        serviceName="General OPD"
+        nowServingSummary="None"
+      />
+    );
+
+    expect(screen.queryByText(/Estimated wait:/i)).not.toBeInTheDocument();
+  });
 });

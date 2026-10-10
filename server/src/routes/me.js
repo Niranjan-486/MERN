@@ -3,6 +3,7 @@ const { User, Token } = require('../models');
 const { authenticate } = require('../middleware/auth');
 const { formatUserResponse } = require('./auth');
 const { getQueueDate } = require('../utils/queueDate');
+const queueService = require('../services/queueService');
 const AppError = require('../utils/AppError');
 
 const router = express.Router();
@@ -42,16 +43,11 @@ router.get('/tokens/active', authenticate, async (req, res, next) => {
     const result = await Promise.all(
       activeTokens.map(async (t) => {
         let peopleAhead = null;
+        let etaSeconds = null;
         if (t.status === 'waiting') {
-          peopleAhead = await Token.countDocuments({
-            serviceId: t.serviceId,
-            queueDate: t.queueDate,
-            status: 'waiting',
-            $or: [
-              { priority: { $gt: t.priority } },
-              { priority: t.priority, number: { $lt: t.number } },
-            ],
-          });
+          const statusInfo = await queueService.getTokenStatus(t._id);
+          peopleAhead = statusInfo.peopleAhead;
+          etaSeconds = statusInfo.etaSeconds;
         }
 
         return {
@@ -62,6 +58,7 @@ router.get('/tokens/active', authenticate, async (req, res, next) => {
           priority: t.priority,
           peopleAhead,
           counterName: (t.counterId && t.counterId.name) || null,
+          etaSeconds,
         };
       })
     );
