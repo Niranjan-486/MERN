@@ -249,7 +249,7 @@ describe('Phase 1: Service-Time EWMA Tracking & Wait-Time ETA Integration Tests'
       waitingTokens.push(t);
     }
 
-    const snapshot = await queueService.getQueueSnapshot(service._id, '2026-10-10');
+    const snapshot = await queueService.getQueueSnapshot(service._id, waitingTokens[0].queueDate);
     expect(snapshot.waitingTokens).toHaveLength(6);
 
     // Verify snapshot ETAs match getTokenStatus ETAs exactly

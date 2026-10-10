@@ -50,7 +50,32 @@ const env = {
   STAFF_OTP_CODE: process.env.STAFF_OTP_CODE || (isTest ? 'staffsecret123' : ''),
   CLIENT_ORIGIN: rawOrigins,
   CLIENT_ORIGINS: clientOrigins,
+  VAPID_PUBLIC_KEY: process.env.VAPID_PUBLIC_KEY || '',
+  VAPID_PRIVATE_KEY: process.env.VAPID_PRIVATE_KEY || '',
+  VAPID_SUBJECT: process.env.VAPID_SUBJECT || '',
 };
+
+function validateVapidConfig({ publicKey, privateKey, subject } = {}) {
+  if (!publicKey || typeof publicKey !== 'string' || publicKey.trim().length < 80) {
+    throw new Error(
+      'Config error: VAPID_PUBLIC_KEY must be a valid base64url string of at least 80 characters when "push" channel is active'
+    );
+  }
+  if (!privateKey || typeof privateKey !== 'string' || privateKey.trim().length < 40) {
+    throw new Error(
+      'Config error: VAPID_PRIVATE_KEY must be a valid base64url string of at least 40 characters when "push" channel is active'
+    );
+  }
+  if (
+    !subject ||
+    typeof subject !== 'string' ||
+    (!subject.trim().startsWith('mailto:') && !subject.trim().startsWith('https://'))
+  ) {
+    throw new Error(
+      'Config error: VAPID_SUBJECT must be a valid mailto: or https: URL when "push" channel is active'
+    );
+  }
+}
 
 // Fail-fast startup validation with clear messages
 if (!env.JWT_SECRET || env.JWT_SECRET.length < 32) {
@@ -68,5 +93,16 @@ if (clientOrigins.length === 0) {
 if (!isTest && !env.MONGODB_URI) {
   throw new Error('Config error: MONGODB_URI is required. Please set MONGODB_URI (or MONGO_URI).');
 }
+
+// If push channel is active, validate VAPID configuration immediately
+if (env.NOTIFY_CHANNELS.includes('push')) {
+  validateVapidConfig({
+    publicKey: env.VAPID_PUBLIC_KEY,
+    privateKey: env.VAPID_PRIVATE_KEY,
+    subject: env.VAPID_SUBJECT,
+  });
+}
+
+env.validateVapidConfig = validateVapidConfig;
 
 module.exports = env;

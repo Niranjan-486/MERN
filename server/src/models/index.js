@@ -5,6 +5,7 @@ const User = require('./User');
 const Token = require('./Token');
 const TokenSequence = require('./TokenSequence');
 const Notification = require('./Notification');
+const PushSubscription = require('./PushSubscription');
 
 module.exports = {
   Organization,
@@ -14,4 +15,5 @@ module.exports = {
   Token,
   TokenSequence,
   Notification,
+  PushSubscription,
 };

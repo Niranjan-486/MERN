@@ -8,6 +8,7 @@ const meRouter = require('./routes/me');
 const servicesRouter = require('./routes/services');
 const countersRouter = require('./routes/counters');
 const tokensRouter = require('./routes/tokens');
+const pushRouter = require('./routes/push');
 const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
@@ -34,6 +35,7 @@ app.use('/api/me', meRouter);
 app.use('/api/services', servicesRouter);
 app.use('/api/counters', countersRouter);
 app.use('/api/tokens', tokensRouter);
+app.use('/api/push', pushRouter);
 
 // Central error handler
 app.use(errorHandler);

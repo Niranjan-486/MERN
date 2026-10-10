@@ -13,6 +13,7 @@
     "start": "npm --prefix server start",
     "seed": "npm --prefix server run seed --",
     "smoke": "npm --prefix server run smoke --",
-    "watch": "npm --prefix server run watch --"
+    "watch": "npm --prefix server run watch --",
+    "vapid": "npm --prefix server run vapid"
   }
 }

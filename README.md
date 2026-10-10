@@ -417,3 +417,74 @@ Follow these exact steps to see automatic no-show and local notifications in act
   - Event received: `notification:new` with `kind: "no_show"`.
   - The counter is immediately freed to call the next patient.
 
+---
+
+## Notifications (Web Push, In-App & Log Channels)
+
+SmartQueue features a decoupled, multi-channel notification pipeline. While in-app toasts and live updates work through Socket.io when the web application is open, Web Push notifications (VAPID) alert patients on their mobile devices and desktops even when the browser or tab is completely closed.
+
+### 1. Delivery Channels
+
+| Channel | Identifier | Destination | Purpose |
+| :--- | :--- | :--- | :--- |
+| **In-App** | `inapp` | MongoDB `Notification` collection + Socket.io room `user:{userId}` | Live updates, bell menu, and toast alerts for users with the page open. |
+| **Web Push** | `push` | Browser Push Service (Apple APNs, Google FCM, Mozilla Autopush) via RFC 8291/8292 | Native notification tray & lock screen alerts when the page/browser is closed. |
+| **Audit Log** | `log` | Stdout JSON log (`[NOTIFICATION_LOG]`) | Operational logging and automated verification testing. |
+
+Channels are configured via the `NOTIFY_CHANNELS` environment variable (e.g. `NOTIFY_CHANNELS=inapp,push,log`).
+
+### 2. Generating & Rotating VAPID Keys
+
+Web Push relies on standard VAPID (Voluntary Application Server Identification) keypairs:
+
+```bash
+# Generate a fresh VAPID keypair
+npm run vapid
+```
+
+This outputs ready-to-copy `.env` lines:
+```env
+VAPID_PUBLIC_KEY=BNcRdre... (87 characters base64url)
+VAPID_PRIVATE_KEY=tBHItJI... (43 characters base64url)
+VAPID_SUBJECT=mailto:admin@example.com
+```
+
+#### Automated Client Key Rotation
+If you ever rotate the VAPID keys on the server:
+- When a user opens the application, `usePushNotifications` checks the server's public key from `GET /api/push/public-key`.
+- If the browser's existing subscription key differs from the new public key, the client automatically unsubscribes the old key, removes the obsolete endpoint on the server, and registers a fresh subscription with the new key. No user intervention is required.
+
+### 3. Testing Web Push Locally
+
+#### Desktop Chrome / Edge:
+1. Ensure `NOTIFY_CHANNELS=inapp,push,log` in `server/.env`.
+2. Ensure `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, and `VAPID_SUBJECT` are set in `server/.env`.
+3. Start the server (`npm run dev`) and client (`npm run dev:client`).
+4. Log in as a patient at `http://localhost:5173/login`.
+5. On the patient home screen, locate the **"Get notified even when this page is closed"** card.
+6. Click **"Enable notifications"** and choose **"Allow"** in the browser permission prompt.
+7. Click the **"Test push"** button.
+8. Observe the native OS notification alert on your desktop.
+9. Close the browser tab. In another window or terminal, call the patient's token — the push notification will still appear!
+
+#### Android (Chrome / Edge / Firefox):
+1. Connect to the client using your machine's LAN IP or an HTTPS tunnel (e.g., ngrok/Render).
+2. Tap "Enable notifications" -> "Allow".
+3. Notifications will arrive in the Android system tray and vibrate the device.
+
+#### iOS Safari (iPhone / iPad):
+- **Apple Requirement**: Web Push on iOS requires iOS 16.4+ and requires the site to be installed as a PWA on the Home Screen.
+- If opened directly in Safari, SmartQueue displays an **"Add to Home Screen"** badge with instructions: tap the **Share** button (box with upward arrow) -> tap **"Add to Home Screen"**.
+- Once launched from the Home Screen icon, tap **"Enable notifications"** to receive lock-screen push alerts.
+
+### 4. Privacy & Payload Security Contract
+- **No Personal Health Data (PHI)**: Push payloads never include patient names, phone numbers, or clinical details.
+- **Payload Structure**: Payloads strictly contain `{ title, body, kind, tag, url, requireInteraction }` (always under 1 KB).
+- **Rationale**: Prevents data leakage on shared lock screens, ambient family displays, and intermediate third-party push relay clouds.
+
+### 5. Common Troubleshooting
+- **Notification permission blocked**: If a user previously clicked "Block", the browser does not allow re-prompting via JavaScript. The user must click the site settings / padlock icon in the URL bar and change Notifications to "Allow".
+- **Localhost HTTP vs HTTPS**: Service Workers and Push API work on `http://localhost` (secure origin exception) and any `https://` domain. On remote LAN IPs (e.g. `http://192.168.1.5:5173`), modern browsers require HTTPS.
+- **Shared phones**: When User B logs in on a phone previously used by User A, the atomic upsert on `/api/push/subscriptions` automatically reassigns the device endpoint to User B and cleans up subscriptions older than the newest 5 devices.
+
+

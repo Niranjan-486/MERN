@@ -12,7 +12,8 @@
     "test": "node node_modules/jest/bin/jest.js --runInBand --verbose",
     "seed": "node src/scripts/seed.js",
     "smoke": "node scripts/smoke.js",
-    "watch": "node src/scripts/watch.js"
+    "watch": "node src/scripts/watch.js",
+    "vapid": "node src/scripts/generateVapid.js"
   },
   "dependencies": {
     "bullmq": "^6.3.12",
@@ -24,7 +25,8 @@
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^8.7.0",
     "socket.io": "^4.8.4",
-    "socket.io-client": "^4.8.4"
+    "socket.io-client": "^4.8.4",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "jest": "^29.7.0",

@@ -422,3 +422,33 @@ Follow these exact steps to see automatic no-show and local notifications in act
   - Event received: `notification:new` with `kind: "no_show"`.
   - The counter is immediately freed to call the next patient.
 
+---
+
+## Web Push Notifications & Push Subscription API
+
+### Configuration
+```env
+NOTIFY_CHANNELS=inapp,push,log
+VAPID_PUBLIC_KEY=<87 chars base64url uncompressed P-256 public key>
+VAPID_PRIVATE_KEY=<43 chars base64url P-256 private key>
+VAPID_SUBJECT=mailto:admin@example.com
+```
+
+Generate fresh keys at any time using `npm run vapid`.
+
+### Endpoints
+- `GET /api/push/public-key` (Authenticated):
+  Returns `{ publicKey }`. Returns HTTP 503 with `{ error: { code: 'PUSH_DISABLED' } }` if `'push'` is not in `NOTIFY_CHANNELS`.
+- `POST /api/push/subscriptions` (Authenticated):
+  Body: `{ endpoint, keys: { p256dh, auth } }`.
+  Validates HTTPS endpoint (<= 2048 chars) and base64url keys.
+  Executes an atomic upsert keyed by endpoint:
+  - If a device is passed from Patient A to Patient B, ownership updates to Patient B and resets `failureCount` to 0.
+  - Prunes oldest subscriptions beyond 5 per user.
+- `DELETE /api/push/subscriptions` (Authenticated):
+  Body: `{ endpoint }`.
+  Deletes the subscription owned by the authenticated caller idempotently.
+- `POST /api/push/test` (Authenticated):
+  Sends a test notification to caller's registered devices. Rate-limited to 1 request per 10 seconds per user (returns 429 `RATE_LIMITED` on bursts).
+
+

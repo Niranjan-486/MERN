@@ -4,6 +4,7 @@ import { useSocket } from '../realtime/SocketProvider';
 import { api } from '../lib/api';
 import { getFriendlyErrorMessage } from '../lib/errors';
 import { TokenCard } from '../components/TokenCard';
+import { PushNotificationCard } from '../components/PushNotificationCard';
 
 export function PatientHome() {
   const { user, logout } = useAuth();
@@ -341,6 +342,9 @@ export function PatientHome() {
             {error}
           </div>
         )}
+
+        {/* Web Push Notification Card */}
+        <PushNotificationCard />
 
         {/* Active Tokens Section */}
         <section className="patient-tokens-section" aria-label="My Tokens">

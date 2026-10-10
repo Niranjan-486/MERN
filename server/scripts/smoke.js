@@ -148,6 +148,61 @@ async function main() {
     staffToken = staffAuth.data.token;
     console.log(`  [PASS] Staff logged in: ${STAFF_PHONE} (ID: ${staffAuth.data.user?.id})`);
 
+    // ------------------------------------------------------------------
+    // Step 2b: Web Push (VAPID) Verification (if enabled)
+    // ------------------------------------------------------------------
+    console.log('\n[Step 2b] Checking Web Push (VAPID) endpoint & subscriptions...');
+    const pushKeyRes = await requestJson(`${apiUrl}/api/push/public-key`, {
+      headers: { Authorization: `Bearer ${patientToken}` },
+    });
+
+    if (pushKeyRes.status === 503) {
+      console.log('  [INFO] Push channel is disabled (503 PUSH_DISABLED); skipping push subscription test');
+    } else if (pushKeyRes.ok && pushKeyRes.data?.publicKey) {
+      const pubKey = pushKeyRes.data.publicKey;
+      if (typeof pubKey !== 'string' || pubKey.length !== 87 || !/^[A-Za-z0-9_-]+$/.test(pubKey)) {
+        console.error(`  [FAIL] VAPID public key invalid (length: ${pubKey?.length}, expected 87 chars base64url)`);
+        process.exit(1);
+      }
+      console.log('  [PASS] VAPID public key verified (87 chars base64url)');
+
+      // Test POST fake subscription
+      const fakeEndpoint = `https://fcm.googleapis.com/fcm/send/smoke-${Date.now()}`;
+      const fakeP256dh = 'BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA_0QTpQtUbVlUls0VJXg7A8u-Ts1XbjhazAkj7I99e8QcYP7DQA';
+      const fakeAuth = 'tBHItJI5svbpez7KI4CCXg';
+
+      const subRes = await requestJson(`${apiUrl}/api/push/subscriptions`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${patientToken}` },
+        body: JSON.stringify({
+          endpoint: fakeEndpoint,
+          keys: { p256dh: fakeP256dh, auth: fakeAuth },
+        }),
+      });
+
+      if (!subRes.ok) {
+        console.error('  [FAIL] POST /api/push/subscriptions failed:', subRes.data);
+        process.exit(1);
+      }
+      console.log('  [PASS] POST /api/push/subscriptions created fake subscription cleanly');
+
+      // Test DELETE fake subscription
+      const delRes = await requestJson(`${apiUrl}/api/push/subscriptions`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${patientToken}` },
+        body: JSON.stringify({ endpoint: fakeEndpoint }),
+      });
+
+      if (!delRes.ok) {
+        console.error('  [FAIL] DELETE /api/push/subscriptions failed:', delRes.data);
+        process.exit(1);
+      }
+      console.log('  [PASS] DELETE /api/push/subscriptions deleted fake subscription cleanly');
+    } else {
+      console.error('  [FAIL] Unexpected response from /api/push/public-key:', pushKeyRes.status, pushKeyRes.data);
+      process.exit(1);
+    }
+
     // List services and pick the first
     const servicesRes = await requestJson(`${apiUrl}/api/services`, {
       headers: { Authorization: `Bearer ${patientToken}` },

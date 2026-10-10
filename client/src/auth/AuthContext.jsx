@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { cleanupPushSubscription } from '../push/usePushNotifications';
 
 const AuthContext = createContext(null);
 
@@ -32,6 +33,9 @@ export function AuthProvider({ children }) {
   };
 
   const logout = () => {
+    try {
+      cleanupPushSubscription();
+    } catch (_) {}
     try {
       localStorage.removeItem('token');
       localStorage.removeItem('user');

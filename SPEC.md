@@ -106,3 +106,31 @@ Terminal: completed, skipped, no_show, cancelled
     - (a) Queries MongoDB for overdue called tokens and calls `markNoShow` directly (needs zero Redis).
     - (b) Runs near-planner for active services today.
   - If Redis restarts and loses all data, the sweeper heals overdue tokens and near reminders automatically.
+
+## Web Push Notifications (VAPID) & PWA Integration
+- **Channels**:
+  - `inapp`: In-app persistent notification stored in MongoDB and broadcast to the user's active Socket.io room (`notification:new`).
+  - `push`: Web Push (VAPID) delivered to the patient's registered browser push subscriptions via RFC 8291 / RFC 8292.
+  - `log`: Structured JSON audit log on stdout (`[NOTIFICATION_LOG]`).
+- **PushSubscription Entity & Device Pruning**:
+  - `PushSubscription`: `userId` (indexed), `endpoint` (unique, max 2048 chars, https only), `keys: { p256dh, auth }` (base64url), `userAgent`, `failureCount` (default 0), `lastSeenAt`, `timestamps`.
+  - Atomic upsert keyed by `endpoint`: if a device changes users (e.g. shared device), ownership updates to the current caller and resets `failureCount` to 0.
+  - Device cap: At most 5 subscriptions per user. After upsert, subscriptions beyond the newest 5 are deleted.
+- **Push Channel Delivery & Retry Semantics**:
+  - Sends to all registered devices for the user in parallel (`Promise.allSettled`).
+  - Unsubscribed devices (HTTP 404 / 410): deleted from MongoDB immediately; call still succeeds.
+  - Transient failures (HTTP 500, 503, 429, network): increment `failureCount`. On the 5th consecutive failure, the subscription is deleted.
+  - Resolution: `pushChannel.send()` resolves if at least one device receives the push or if all devices were gone (404/410). It throws only if every attempted send failed retryably, triggering BullMQ retry with exponential backoff.
+  - Notification options:
+    - `near`: TTL 600s, urgency `high`, requireInteraction `false`, topic `t<tokenId>`
+    - `called`: TTL `NO_SHOW_GRACE_SECONDS`, urgency `high`, requireInteraction `true`, topic `t<tokenId>`
+    - `no_show`: TTL 3600s, urgency `normal`, requireInteraction `false`, topic `t<tokenId>`
+- **Payload Privacy Contract**:
+  - Payloads are strictly under 1 KB and NEVER contain patient names or phone numbers.
+  - Rationale: Prevents eavesdropping across shared devices, lock screens, and third-party push relay middleboxes (Apple APNs, Google FCM, Mozilla autopush).
+- **Client PWA & Service Worker**:
+  - `sw.js` (plain JS, no asset caching): listens for `push` events, defensively parses payloads, and shows notification with icon, badge, vibration, and URL action; handles `notificationclick` to focus existing tabs or open a new window.
+  - `usePushNotifications`: React hook managing lifecycle states (`unsupported`, `needs-install`, `blocked`, `off`, `enabling`, `on`, `error`).
+  - iOS Safari: Web Push requires adding the PWA to the Home Screen (`needs-install` guidance).
+  - Key rotation: On mount, if `applicationServerKey` differs from `/api/push/public-key`, the hook automatically unsubscribes the old key, notifies backend, and re-subscribes with the new key.
+

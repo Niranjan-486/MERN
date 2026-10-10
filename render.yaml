@@ -33,7 +33,13 @@ services:
       - key: NEAR_THRESHOLD
         value: "3"
       - key: NOTIFY_CHANNELS
-        value: inapp,log
+        value: inapp,push,log
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        sync: false
 
   - type: web
     name: smartqueue-web-firstmern
@@ -41,6 +47,10 @@ services:
     rootDir: client
     buildCommand: npm ci && npm run build
     staticPublishPath: dist
+    headers:
+      - path: /sw.js
+        name: Cache-Control
+        value: no-cache
     routes:
       - type: rewrite
         source: /*

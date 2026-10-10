@@ -13,10 +13,20 @@ const {
   Token,
   TokenSequence,
   Notification,
+  PushSubscription,
 } = require('./models');
 
 async function buildAllIndexes() {
-  const models = [Organization, Service, Counter, User, Token, TokenSequence, Notification];
+  const models = [
+    Organization,
+    Service,
+    Counter,
+    User,
+    Token,
+    TokenSequence,
+    Notification,
+    PushSubscription,
+  ];
   for (const model of models) {
     try {
       await model.init();
