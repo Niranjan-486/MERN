@@ -32,9 +32,7 @@ export function StaffDashboard() {
   const { connectionStatus, subscribe } = useSocket();
 
   const [counters, setCounters] = useState([]);
-  const [selectedCounterId, setSelectedCounterId] = useState(() => {
-    return localStorage.getItem('selectedCounterId') || '';
-  });
+  const [selectedCounterId, setSelectedCounterId] = useState('');
   const [dashboard, setDashboard] = useState(null);
   const [loading, setLoading] = useState(true);
   const [actionInFlight, setActionInFlight] = useState(false);
@@ -80,15 +78,32 @@ export function StaffDashboard() {
         const data = await api.get('/api/counters');
         if (!isMounted) return;
         const list = Array.isArray(data) ? data : [];
-        setCounters(list);
+        // The counter picker must ignore offline counters
+        const activeCounters = list.filter((c) => c.status !== 'offline');
+        setCounters(activeCounters);
 
-        // Auto-select if stored counter exists in list, else pick first
-        let currentId = selectedCounterId;
-        const found = list.find((c) => c.id === currentId);
-        if (!found && list.length > 0) {
-          currentId = list[0].id;
-          setSelectedCounterId(currentId);
-          localStorage.setItem('selectedCounterId', currentId);
+        const storedId = localStorage.getItem('selectedCounterId');
+        const isStoredInList = Boolean(storedId && activeCounters.some((c) => c.id === storedId));
+
+        // If a counter id remembered in localStorage is no longer in the list, clear it
+        if (storedId && !isStoredInList) {
+          localStorage.removeItem('selectedCounterId');
+        }
+
+        if (activeCounters.length === 1) {
+          // Exactly one non-offline counter: skip picker and open its dashboard directly
+          const singleId = activeCounters[0].id;
+          setSelectedCounterId(singleId);
+          localStorage.setItem('selectedCounterId', singleId);
+        } else if (activeCounters.length >= 2) {
+          // Keep picker for two or more
+          if (isStoredInList) {
+            setSelectedCounterId(storedId);
+          } else {
+            setSelectedCounterId('');
+          }
+        } else {
+          setSelectedCounterId('');
         }
       } catch (err) {
         if (isMounted) setError(getFriendlyErrorMessage(err));
@@ -202,24 +217,28 @@ export function StaffDashboard() {
           ⚡ SmartQueue <span className="badge badge-staff">Staff Portal</span>
         </div>
         <div className="navbar-controls">
-          <div className="counter-picker-group">
-            <label htmlFor="counter-picker" className="picker-label">
-              Desk:
-            </label>
-            <select
-              id="counter-picker"
-              className="counter-select"
-              value={selectedCounterId}
-              onChange={(e) => setSelectedCounterId(e.target.value)}
-              disabled={loading || actionInFlight}
-            >
-              {counters.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name} ({c.serviceName})
-                </option>
-              ))}
-            </select>
-          </div>
+          {counters.length >= 2 && (
+            <div className="counter-picker-group">
+              <label htmlFor="counter-picker" className="picker-label">
+                Desk:
+              </label>
+              <select
+                id="counter-picker"
+                aria-label="Desk"
+                className="counter-select"
+                value={selectedCounterId}
+                onChange={(e) => setSelectedCounterId(e.target.value)}
+                disabled={loading || actionInFlight}
+              >
+                {!selectedCounterId && <option value="">Select a desk</option>}
+                {counters.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} ({c.serviceName})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <span className={`connection-badge ${connectionStatus}`}>
             <span className="status-dot"></span>
@@ -256,7 +275,11 @@ export function StaffDashboard() {
           <p className="loading-text">Loading desk dashboard...</p>
         ) : !selectedCounterId ? (
           <div className="empty-card">
-            <p>No desk selected. Please configure a counter in your organization.</p>
+            <p>
+              {counters.length === 0
+                ? 'No desk selected. Please configure a counter in your organization.'
+                : 'Please select a desk to view its dashboard.'}
+            </p>
           </div>
         ) : (
           <div className="dashboard-grid">

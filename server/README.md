@@ -24,7 +24,7 @@ npm install
 # 3. Create .env from template
 cp .env.example .env
 
-# 4. Seed database (creates Org, Service, 3 Counters, 1 Staff, 5 Patients)
+# 4. Seed database (creates Org, Service, 1 Counter, 1 Staff, 5 Patients)
 npm run seed
 
 # 5. Run complete test suite (unit + integration concurrency & realtime tests)
@@ -38,7 +38,7 @@ npm run dev
 
 ## Seed Accounts & Test Credentials
 
-The database seed (`npm run seed`) populates a test organization, a General OPD service, three counters, and known user credentials:
+The database seed (`npm run seed`) populates 1 organization, 1 General OPD service, 1 counter ("Counter 1"), 5 patients, and 1 staff user:
 
 | Role | Name | Phone | OTP | Organization |
 | :--- | :--- | :--- | :--- | :--- |

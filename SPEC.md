@@ -134,3 +134,25 @@ Terminal: completed, skipped, no_show, cancelled
   - iOS Safari: Web Push requires adding the PWA to the Home Screen (`needs-install` guidance).
   - Key rotation: On mount, if `applicationServerKey` differs from `/api/push/public-key`, the hook automatically unsubscribes the old key, notifies backend, and re-subscribes with the new key.
 
+## Database Seed & Demo Setup (`npm run seed`)
+- **Seeded Entities**: The database seed idempotently creates:
+  - 1 Organization: "City General Hospital" (`type: 'hospital'`)
+  - 1 Service: "General OPD" (`avgServiceTimeSec: 300`, `isActive: true`)
+  - 1 Counter: "Counter 1" (`status: 'active'`)
+  - 1 Staff user: phone `9999900000` (associated with the seeded organization)
+  - 5 Patients: phones `9999900001` through `9999900005`
+- **Idempotency & Counter Reconciliation**:
+  - Reuses an existing "Counter 1" if present, setting its status to `'active'`.
+  - Reconciles any other counters belonging to the seeded service:
+    - If a `called` or `serving` token is currently on that counter: leaves the counter untouched and prints a warning to finish or skip that token first.
+    - Else if no token has ever referenced that counter: deletes the counter.
+    - Else (only historical tokens reference it): updates the counter status to `'offline'` so past records still display a counter name.
+- **Safety Rules**:
+  - Always prints the database host and name before executing.
+  - Requires the `--yes` CLI argument when connecting to any non-localhost host.
+- **Staff Portal Counter Selection**:
+  - The counter picker ignores all `'offline'` counters.
+  - When exactly 1 non-offline counter remains, the picker is skipped and that counter's dashboard opens directly.
+  - When 2 or more non-offline counters exist, the picker dropdown is displayed.
+  - If a counter ID remembered in browser `localStorage` is no longer in the non-offline counter list, it is cleared immediately.
+

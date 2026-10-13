@@ -11,23 +11,29 @@ const env = require('../config/env');
 const { connectDB } = require('../config/db');
 const { Organization, Service, Counter, User, Token } = require('../models');
 
-async function seed() {
+async function seed(options = {}) {
   try {
     const mongoUri =
+      options.mongoUri ||
       process.env.MONGODB_URI ||
       process.env.MONGO_URI ||
       env.MONGODB_URI ||
       env.MONGO_URI;
 
-    if (!mongoUri) {
+    if (!mongoUri && mongoose.connection.readyState !== 1) {
       console.error(
         '\n[ERROR] Seed aborted: MONGODB_URI environment variable is missing.\n' +
         'Please set MONGODB_URI in your environment or .env file before running seed.\n'
       );
-      process.exit(1);
+      if (options.exitOnError !== false) {
+        process.exit(1);
+      }
+      throw new Error('MONGODB_URI environment variable is missing');
     }
 
-    await connectDB(mongoUri);
+    if (mongoose.connection.readyState !== 1) {
+      await connectDB(mongoUri);
+    }
 
     const host = mongoose.connection.host || 'unknown';
     const dbName = mongoose.connection.name || 'unknown';
@@ -35,7 +41,8 @@ async function seed() {
     console.log(`\nAbout to seed database "${dbName}" on host "${host}"...`);
 
     const isLocalhost = ['localhost', '127.0.0.1', '::1'].includes(host.toLowerCase());
-    const hasYesFlag = process.argv.includes('--yes');
+    const argv = options.argv || process.argv;
+    const hasYesFlag = argv.includes('--yes');
 
     if (!isLocalhost && !hasYesFlag) {
       console.error(
@@ -43,8 +50,13 @@ async function seed() {
         `To seed a remote or production database, you must pass the --yes flag:\n` +
         `  npm run seed -- --yes\n`
       );
-      await mongoose.connection.close();
-      process.exit(1);
+      if (options.closeConnection !== false) {
+        await mongoose.connection.close();
+      }
+      if (options.exitOnError !== false) {
+        process.exit(1);
+      }
+      throw new Error(`Target host "${host}" is not localhost and --yes was not provided`);
     }
 
     console.log('Syncing database indexes...');
@@ -73,17 +85,40 @@ async function seed() {
     );
     console.log(`Service [${service.name}]: ${service._id}`);
 
-    // 3. Three active counters
-    const counterNames = ['Counter 1', 'Counter 2', 'Counter 3'];
-    const counters = [];
-    for (const name of counterNames) {
-      const counter = await Counter.findOneAndUpdate(
-        { serviceId: service._id, name },
-        { serviceId: service._id, name, status: 'active' },
-        { upsert: true, new: true, setDefaultsOnInsert: true }
-      );
-      counters.push(counter);
-      console.log(`Counter [${counter.name}]: ${counter._id}`);
+    // 3. Exactly one active counter: "Counter 1"
+    const counter1 = await Counter.findOneAndUpdate(
+      { serviceId: service._id, name: 'Counter 1' },
+      { serviceId: service._id, name: 'Counter 1', status: 'active' },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+    console.log(`Counter [${counter1.name}]: ${counter1._id} (active)`);
+
+    // Reconcile other counters for the seeded service
+    const otherCounters = await Counter.find({
+      serviceId: service._id,
+      _id: { $ne: counter1._id },
+    });
+
+    for (const c of otherCounters) {
+      const activeToken = await Token.findOne({
+        counterId: c._id,
+        status: { $in: ['called', 'serving'] },
+      });
+
+      if (activeToken) {
+        console.warn(
+          `[WARNING] Counter "${c.name}" has an active token (status: ${activeToken.status}). Leaving untouched. Please finish or skip that token first.`
+        );
+      } else {
+        const anyToken = await Token.findOne({ counterId: c._id });
+        if (!anyToken) {
+          await Counter.deleteOne({ _id: c._id });
+          console.log(`Counter [${c.name}]: deleted (no token referenced it)`);
+        } else {
+          await Counter.updateOne({ _id: c._id }, { status: 'offline' });
+          console.log(`Counter [${c.name}]: set to offline (referenced by past tokens)`);
+        }
+      }
     }
 
     // Clean up any legacy seeded phones with '+' prefix
@@ -130,7 +165,7 @@ async function seed() {
     console.log('\n--- Seed complete. Summary of IDs ---');
     console.log(`Organization ID : ${organization._id}`);
     console.log(`Service ID      : ${service._id}`);
-    counters.forEach((c) => console.log(`Counter ID (${c.name}): ${c._id}`));
+    console.log(`Counter ID (${counter1.name}): ${counter1._id}`);
     console.log(`Staff User ID   : ${staffUser._id}`);
     patients.forEach((p) => console.log(`Patient ID (${p.name}): ${p._id}`));
 
@@ -150,19 +185,32 @@ async function seed() {
       '   curl -X POST http://localhost:3000/api/auth/verify-otp -H "Content-Type: application/json" -d \'{"phone":"9999900000","otp":"staffsecret123"}\''
     );
 
-    await mongoose.connection.close();
-    process.exit(0);
+    if (options.closeConnection !== false) {
+      await mongoose.connection.close();
+    }
+    return { organization, service, counter: counter1, staffUser, patients };
   } catch (err) {
     const safeMsg = (err.message || String(err)).replace(
       /(mongodb(?:\+srv)?:\/\/)([^:@\s]+):([^@\s]+)@/g,
       '$1***:***@'
     );
     console.error('Seed failed:', safeMsg);
-    try {
-      await mongoose.connection.close();
-    } catch (_) {}
-    process.exit(1);
+    if (options.closeConnection !== false) {
+      try {
+        await mongoose.connection.close();
+      } catch (_) {}
+    }
+    if (options.exitOnError !== false) {
+      process.exit(1);
+    }
+    throw err;
   }
 }
 
-seed();
+if (require.main === module) {
+  seed()
+    .then(() => process.exit(0))
+    .catch(() => process.exit(1));
+}
+
+module.exports = { seed };

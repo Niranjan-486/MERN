@@ -34,7 +34,7 @@ cd server && npm install && cd ../client && npm install && cd ..
 cp server/.env.example server/.env
 cp client/.env.example client/.env
 
-# Seed initial organization, services, counters, staff, and patients
+# Seed initial organization, service, counter, staff, and patients
 npm run seed
 ```
 
@@ -62,14 +62,16 @@ npm run dev:client
 
 ## Seed Accounts & Test Credentials
 
-The database seed (`npm run seed`) creates an organization ("City General Hospital"), an active service ("General OPD"), three counters, and the following login accounts:
+The database seed (`npm run seed`) creates 1 organization ("City General Hospital"), 1 service ("General OPD"), 1 counter ("Counter 1"), 5 patients, and 1 staff user:
 
 | Role | Name | Phone | OTP Code | Description |
 | :--- | :--- | :--- | :--- | :--- |
-| **Staff** | Dr. Sharma (Staff) | `9999900000` | `staffsecret123` | Counter staff (`STAFF_OTP_CODE`) |
-| **Patient 1** | Ramesh Kumar | `9999900001` | `123456` | Pre-registered patient (`OTP_CODE`) |
-| **Patient 2** | Priya Sharma | `9999900002` | `123456` | Pre-registered patient (`OTP_CODE`) |
-| **Patient 3** | Amit Patel | `9999900003` | `123456` | Pre-registered patient (`OTP_CODE`) |
+| **Staff** | Staff Member | `9999900000` | `staffsecret123` | Counter staff (`STAFF_OTP_CODE`) |
+| **Patient 1** | Patient 1 | `9999900001` | `123456` | Pre-registered patient (`OTP_CODE`) |
+| **Patient 2** | Patient 2 | `9999900002` | `123456` | Pre-registered patient (`OTP_CODE`) |
+| **Patient 3** | Patient 3 | `9999900003` | `123456` | Pre-registered patient (`OTP_CODE`) |
+| **Patient 4** | Patient 4 | `9999900004` | `123456` | Pre-registered patient (`OTP_CODE`) |
+| **Patient 5** | Patient 5 | `9999900005` | `123456` | Pre-registered patient (`OTP_CODE`) |
 | **New Patient** | *(any 10-13 digit phone)* | e.g. `9876543210` | `123456` | Auto-registers as `Patient <digits>` |
 
 ---
@@ -97,7 +99,7 @@ Follow this walkthrough to test the real-time queue synchronization across two b
 2. Enter phone: `9999900000` -> Click **"Request Code"**.
 3. In the Code field, enter `staffsecret123` -> Click **"Sign In"**.
 4. You are redirected to `/staff`. Observe:
-   - Counter picker defaults to **"Counter 1 (General OPD)"**.
+   - Desk dashboard opens directly for **"Counter 1"** (the counter picker is automatically skipped when exactly one non-offline counter exists).
    - **Total Waiting: 1**.
    - Waiting list displays patient `#1 Ramesh Kumar`.
    - Prominent **"Call Next"** button is enabled.
@@ -200,7 +202,7 @@ git push origin master
 
 ### 5. Seeding Production Database
 
-The initial organization ("City General Hospital"), services ("General OPD"), counters, and staff account must be seeded into Atlas.
+The initial organization ("City General Hospital"), service ("General OPD"), counter ("Counter 1"), 5 patients, and staff account must be seeded into Atlas.
 
 Because remote databases require safety confirmation, `npm run seed` requires the `--yes` flag when connecting to a non-localhost host:
 

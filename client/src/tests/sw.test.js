@@ -73,7 +73,7 @@ describe('Service Worker (sw.js) unit test (Test g)', () => {
 
     const payloadObj = {
       title: 'Your token has been called!',
-      body: 'Token #12: Please proceed to Counter 2',
+      body: 'Token #12: Please proceed to Counter 1',
       tag: 'token-66fa',
       requireInteraction: true,
       url: '/tokens/66fa',
@@ -92,7 +92,7 @@ describe('Service Worker (sw.js) unit test (Test g)', () => {
     await pushWaitPromise;
 
     expect(showNotificationMock).toHaveBeenCalledWith('Your token has been called!', {
-      body: 'Token #12: Please proceed to Counter 2',
+      body: 'Token #12: Please proceed to Counter 1',
       icon: '/icons/icon-192.png',
       badge: '/icons/icon-192.png',
       tag: 'token-66fa',
