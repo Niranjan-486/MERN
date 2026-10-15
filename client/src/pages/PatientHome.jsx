@@ -1,8 +1,15 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { toast } from 'sonner';
+import { Users, Clock, AlertCircle } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { useSocket } from '../realtime/SocketProvider';
 import { api } from '../lib/api';
 import { getFriendlyErrorMessage } from '../lib/errors';
+import { formatRelativeTime } from '../lib/formatRelativeTime';
+import { TopBar } from '../components/ui/TopBar';
+import { Button } from '../components/ui/Button';
+import { Skeleton } from '../components/ui/Skeleton';
+import { EmptyState } from '../components/ui/EmptyState';
 import { TokenCard } from '../components/TokenCard';
 import { PushNotificationCard } from '../components/PushNotificationCard';
 
@@ -13,7 +20,6 @@ export function PatientHome() {
   const [services, setServices] = useState([]);
   const [tokens, setTokens] = useState([]);
   const [notifications, setNotifications] = useState([]);
-  const [activeToast, setActiveToast] = useState(null);
   const [nowServingByService, setNowServingByService] = useState({});
   const [loading, setLoading] = useState(true);
   const [joiningServiceId, setJoiningServiceId] = useState(null);
@@ -24,6 +30,14 @@ export function PatientHome() {
   const tokensRef = useRef(tokens);
   useEffect(() => {
     tokensRef.current = tokens;
+  }, [tokens]);
+
+  // Set default document title unless called
+  useEffect(() => {
+    const hasCalled = tokens.some((t) => t.status === 'called');
+    if (!hasCalled) {
+      document.title = 'My Queue — SmartQueue';
+    }
   }, [tokens]);
 
   // Load initial data
@@ -50,7 +64,7 @@ export function PatientHome() {
     loadInitialData();
   }, [loadInitialData]);
 
-  // Resync logic: refetches active tokens, services, and notifications
+  // Resync logic
   const resync = useCallback(async () => {
     try {
       const [servicesData, activeTokens, notifsData] = await Promise.all([
@@ -69,13 +83,11 @@ export function PatientHome() {
       const activeList = Array.isArray(activeTokens) ? activeTokens : [];
       const activeIds = new Set(activeList.map((t) => t.tokenId));
 
-      // Check tokens we previously tracked
       const currentTracked = tokensRef.current || [];
       const resolvedTokens = [...activeList];
 
       for (const prev of currentTracked) {
         if (!activeIds.has(prev.tokenId)) {
-          // Previously known token is missing from active list -> fetch its final status
           try {
             const tokenRes = await api.get(`/api/tokens/${prev.tokenId}`);
             const resolved = tokenRes.token || tokenRes;
@@ -121,18 +133,9 @@ export function PatientHome() {
     };
   }, [resync]);
 
-  // Auto-dismiss active notification toast after 6 seconds
-  useEffect(() => {
-    if (!activeToast) return;
-    const timer = setTimeout(() => {
-      setActiveToast(null);
-    }, 6000);
-    return () => clearTimeout(timer);
-  }, [activeToast]);
-
   // Real-time subscriptions
   useEffect(() => {
-    // 1. token:updated replaces that token's state
+    // 1. token:updated
     const unsubToken = subscribe('token:updated', (payload) => {
       if (!payload || !payload.tokenId) return;
       setTokens((prev) => {
@@ -146,7 +149,7 @@ export function PatientHome() {
       });
     });
 
-    // 2. queue:updated updates now serving and waiting counts
+    // 2. queue:updated
     const unsubQueue = subscribe('queue:updated', (payload) => {
       if (!payload || !payload.serviceId) return;
 
@@ -162,10 +165,13 @@ export function PatientHome() {
       );
     });
 
-    // 3. notification:new displays a toast banner and updates recent list
+    // 3. notification:new -> Sonner toast
     const unsubNotif = subscribe('notification:new', (payload) => {
       if (!payload || !payload.id) return;
-      setActiveToast(payload);
+      toast(payload.title, {
+        description: payload.body,
+        duration: 6000,
+      });
       setNotifications((prev) => [payload, ...prev.filter((n) => n.id !== payload.id)]);
     });
 
@@ -233,13 +239,11 @@ export function PatientHome() {
     }
   };
 
-  // Resolve service name by id
   const getServiceName = (serviceId) => {
     const s = services.find((svc) => svc.id === serviceId);
     return s ? s.name : 'OPD Service';
   };
 
-  // Check if user holds an active token for this service
   const hasActiveTokenInService = (serviceId) => {
     return tokens.some(
       (t) =>
@@ -247,99 +251,27 @@ export function PatientHome() {
     );
   };
 
-  // Format now serving list into a human-readable summary
   const getNowServingSummary = (serviceId) => {
     const list = nowServingByService[serviceId] || [];
-    if (!list || list.length === 0) return 'None at the moment';
+    if (!list || list.length === 0) return 'None';
     return list
       .map((item) => `${item.counterName || 'Desk'} (#${item.tokenNumber})`)
       .join(', ');
   };
 
   return (
-    <div className="patient-layout">
-      {/* Toast Banner for live notifications */}
-      {activeToast && (
-        <aside
-          className={`toast-banner toast-${activeToast.kind}`}
-          role="status"
-          aria-live="polite"
-          style={{
-            position: 'fixed',
-            top: '1rem',
-            right: '1rem',
-            zIndex: 1000,
-            maxWidth: '380px',
-            padding: '1rem',
-            backgroundColor: activeToast.kind === 'no_show' ? '#fff5f5' : '#f0fff4',
-            border: `1px solid ${activeToast.kind === 'no_show' ? '#feb2b2' : '#9ae6b4'}`,
-            borderRadius: '8px',
-            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'flex-start',
-            gap: '0.75rem',
-          }}
-        >
-          <div className="toast-content">
-            <strong
-              style={{
-                display: 'block',
-                color: activeToast.kind === 'no_show' ? '#9b2c2c' : '#22543d',
-                marginBottom: '0.25rem',
-              }}
-            >
-              {activeToast.title}
-            </strong>
-            <p style={{ margin: 0, fontSize: '0.9rem', color: '#2d3748' }}>
-              {activeToast.body}
-            </p>
-          </div>
-          <button
-            type="button"
-            className="toast-close"
-            onClick={() => setActiveToast(null)}
-            aria-label="Dismiss notification"
-            style={{
-              background: 'none',
-              border: 'none',
-              fontSize: '1.25rem',
-              cursor: 'pointer',
-              color: '#718096',
-              lineHeight: 1,
-            }}
-          >
-            ×
-          </button>
-        </aside>
-      )}
+    <div className="min-h-screen bg-paper text-ink flex flex-col">
+      <TopBar user={user} onLogout={logout} />
 
-      <header className="app-navbar">
-        <div className="navbar-brand">⚡ SmartQueue</div>
-        <div className="navbar-user">
-          <span className="user-greeting">Hi, {user?.name || 'Patient'}</span>
-          <span
-            className={`connection-badge ${connectionStatus}`}
-            title={`Socket status: ${connectionStatus}`}
-          >
-            <span className="status-dot"></span>
-            {connectionStatus === 'live' ? 'Live' : 'Reconnecting...'}
-          </span>
-          <button
-            type="button"
-            className="btn btn-outline btn-sm"
-            onClick={logout}
-            aria-label="Log out"
-          >
-            Log out
-          </button>
-        </div>
-      </header>
-
-      <main className="patient-content">
+      <main className="flex-1 w-full max-w-2xl mx-auto px-4 py-6 sm:px-6 space-y-8">
         {error && (
-          <div className="error-banner" role="alert" aria-live="polite">
-            {error}
+          <div
+            className="p-4 rounded-[var(--radius-control)] bg-coral-tint text-coral border border-coral/20 flex items-start gap-3"
+            role="alert"
+            aria-live="polite"
+          >
+            <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" aria-hidden="true" />
+            <div className="text-sm font-medium">{error}</div>
           </div>
         )}
 
@@ -347,17 +279,22 @@ export function PatientHome() {
         <PushNotificationCard />
 
         {/* Active Tokens Section */}
-        <section className="patient-tokens-section" aria-label="My Tokens">
-          <h2 className="section-title">My Queue Tokens</h2>
+        <section aria-label="My Tokens" className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-bold text-ink tracking-tight">Your Token</h2>
+          </div>
 
           {loading ? (
-            <p className="loading-text">Loading queue status...</p>
-          ) : tokens.length === 0 ? (
-            <div className="empty-card">
-              <p>You have no active tokens. Choose a service below to join the queue.</p>
+            <div className="space-y-4">
+              <Skeleton className="h-64 w-full rounded-[var(--radius-ticket)]" />
             </div>
+          ) : tokens.length === 0 ? (
+            <EmptyState
+              title="No active tokens"
+              description="You are not waiting in any queue. Choose a service below to take a token."
+            />
           ) : (
-            <div className="tokens-grid">
+            <div className="space-y-6">
               {tokens.map((token) => (
                 <TokenCard
                   key={token.tokenId}
@@ -373,120 +310,55 @@ export function PatientHome() {
           )}
         </section>
 
-        {/* Recent Updates Section */}
-        {notifications.length > 0 && (
-          <section
-            className="patient-notifications-section"
-            aria-label="Recent updates"
-            style={{ marginTop: '2rem' }}
-          >
-            <h2 className="section-title">Recent Updates</h2>
-            <div
-              className="notifications-list"
-              style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}
-            >
-              {notifications.slice(0, 5).map((n) => (
-                <article
-                  key={n.id}
-                  className={`notification-card kind-${n.kind}`}
-                  style={{
-                    padding: '0.875rem 1rem',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: '6px',
-                    backgroundColor: '#ffffff',
-                  }}
-                >
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      marginBottom: '0.35rem',
-                    }}
-                  >
-                    <span
-                      className={`badge badge-${n.kind}`}
-                      style={{
-                        padding: '0.2rem 0.5rem',
-                        fontSize: '0.75rem',
-                        fontWeight: 'bold',
-                        borderRadius: '4px',
-                        textTransform: 'uppercase',
-                        backgroundColor:
-                          n.kind === 'near'
-                            ? '#feebc8'
-                            : n.kind === 'called'
-                            ? '#c6f6d5'
-                            : '#fed7d7',
-                        color:
-                          n.kind === 'near'
-                            ? '#7b341e'
-                            : n.kind === 'called'
-                            ? '#22543d'
-                            : '#742a2a',
-                      }}
-                    >
-                      {n.kind === 'no_show' ? 'No Show' : n.kind}
-                    </span>
-                    <span style={{ fontSize: '0.8rem', color: '#718096' }}>
-                      {n.createdAt
-                        ? new Date(n.createdAt).toLocaleTimeString([], {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })
-                        : ''}
-                    </span>
-                  </div>
-                  <h4 style={{ margin: '0 0 0.25rem 0', fontSize: '0.95rem' }}>
-                    {n.title}
-                  </h4>
-                  <p style={{ margin: 0, fontSize: '0.875rem', color: '#4a5568' }}>
-                    {n.body}
-                  </p>
-                </article>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* Available Services Section */}
-        <section className="patient-services-section" aria-label="Available Services">
-          <h2 className="section-title">Available OPD Services</h2>
+        {/* Available Services Section (Rows, not card grid) */}
+        <section aria-label="Available Services" className="space-y-3">
+          <h2 className="text-lg font-bold text-ink tracking-tight">Choose a service</h2>
 
           {loading ? (
-            <p className="loading-text">Loading services...</p>
+            <div className="space-y-2">
+              <Skeleton className="h-16 w-full rounded-[var(--radius-control)]" />
+              <Skeleton className="h-16 w-full rounded-[var(--radius-control)]" />
+            </div>
           ) : services.length === 0 ? (
-            <p className="empty-text">No active services currently available.</p>
+            <div className="text-sm text-slate py-4 text-center">
+              No active services currently available.
+            </div>
           ) : (
-            <div className="services-list">
+            <div className="border border-line rounded-[var(--radius-card)] divide-y divide-line bg-paper overflow-hidden shadow-xs">
               {services.map((svc) => {
                 const isAlreadyJoined = hasActiveTokenInService(svc.id);
                 const isJoiningThis = joiningServiceId === svc.id;
 
                 return (
-                  <article key={svc.id} className="service-card">
-                    <div className="service-info">
-                      <h3 className="service-name">{svc.name}</h3>
-                      <p className="service-org">{svc.organizationName}</p>
-                      <p className="service-waiting">
-                        Currently waiting: <strong>{svc.waitingCount}</strong>
-                      </p>
+                  <article
+                    key={svc.id}
+                    className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-line-subtle/30 transition-colors duration-150"
+                  >
+                    <div className="space-y-1">
+                      <h3 className="font-semibold text-ink text-base leading-snug">
+                        {svc.name}
+                      </h3>
+                      <div className="flex items-center gap-3 text-xs text-slate">
+                        <span>{svc.organizationName}</span>
+                        <span aria-hidden="true">•</span>
+                        <span className="flex items-center gap-1 font-medium text-ink">
+                          <Users className="w-3.5 h-3.5 text-slate" aria-hidden="true" />
+                          <span>{svc.waitingCount} waiting</span>
+                        </span>
+                      </div>
                     </div>
 
-                    <div className="service-action">
-                      <button
-                        type="button"
-                        className="btn btn-primary"
+                    <div className="shrink-0 self-start sm:self-center">
+                      <Button
+                        variant={isAlreadyJoined ? 'secondary' : 'primary'}
+                        size="sm"
                         onClick={() => handleJoinQueue(svc.id)}
                         disabled={isAlreadyJoined || isJoiningThis}
+                        loading={isJoiningThis}
                         aria-label={`Join queue for ${svc.name}`}
                       >
-                        {isJoiningThis
-                          ? 'Joining...'
-                          : isAlreadyJoined
-                          ? 'Already in queue'
-                          : 'Join queue'}
-                      </button>
+                        {isAlreadyJoined ? 'In queue' : 'Join queue'}
+                      </Button>
                     </div>
                   </article>
                 );
@@ -494,7 +366,36 @@ export function PatientHome() {
             </div>
           )}
         </section>
+
+        {/* Recent Updates Timeline */}
+        {notifications.length > 0 && (
+          <section aria-label="Recent updates" className="space-y-3 pt-2">
+            <h2 className="text-lg font-bold text-ink tracking-tight">Recent updates</h2>
+            <div className="border border-line rounded-[var(--radius-card)] divide-y divide-line bg-paper overflow-hidden shadow-xs">
+              {notifications.slice(0, 5).map((n) => (
+                <article key={n.id} className="p-4 flex items-start gap-3 text-xs">
+                  <div className="w-2 h-2 rounded-full bg-signal mt-1.5 shrink-0" aria-hidden="true" />
+                  <div className="flex-1 space-y-0.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-semibold text-ink text-[13px]">{n.title}</span>
+                      <time className="text-slate font-medium text-[11px] whitespace-nowrap">
+                        {formatRelativeTime(n.createdAt)}
+                      </time>
+                    </div>
+                    <p className="text-slate text-xs leading-normal">{n.body}</p>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
       </main>
+
+      <footer className="text-center text-xs text-slate py-6 border-t border-line mt-12">
+        <p>SmartQueue • OPD consultation queue system</p>
+      </footer>
     </div>
   );
 }
+
+export default PatientHome;

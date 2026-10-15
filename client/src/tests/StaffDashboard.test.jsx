@@ -221,4 +221,108 @@ describe('StaffDashboard counter selection & picker behavior', () => {
     // Stale offline c2 is replaced by c1 in localStorage
     expect(localStorage.getItem('selectedCounterId')).toBe('c1');
   });
+
+  test('Call Next triggers api.post when queue has waiting patients', async () => {
+    api.get.mockImplementation(async (url) => {
+      if (url === '/api/counters') {
+        return [{ id: 'c1', name: 'Counter 1', status: 'active', serviceId: 's1' }];
+      }
+      if (url === '/api/counters/c1/dashboard') {
+        return {
+          ...mockDashboardC1,
+          waitingCount: 2,
+          waiting: [{ tokenId: 't1', number: 10, patientName: 'John', priority: 0 }],
+        };
+      }
+      throw new Error(`Unexpected GET ${url}`);
+    });
+    api.post.mockResolvedValue({});
+
+    render(<StaffDashboard />);
+
+    const callNextBtn = await screen.findByRole('button', { name: /call next patient/i });
+    expect(callNextBtn).not.toBeDisabled();
+    callNextBtn.click();
+
+    await waitFor(() => {
+      expect(api.post).toHaveBeenCalledWith('/api/counters/c1/call-next', {});
+    });
+  });
+
+  test('Start Serving and Skip actions with ConfirmDialog', async () => {
+    api.get.mockImplementation(async (url) => {
+      if (url === '/api/counters') {
+        return [{ id: 'c1', name: 'Counter 1', status: 'active', serviceId: 's1' }];
+      }
+      if (url === '/api/counters/c1/dashboard') {
+        return {
+          ...mockDashboardC1,
+          current: {
+            tokenId: 'tok-call',
+            number: 15,
+            status: 'called',
+            patientName: 'Jane Doe',
+            priority: 0,
+            noShowInSec: 120,
+          },
+        };
+      }
+      throw new Error(`Unexpected GET ${url}`);
+    });
+    api.post.mockResolvedValue({});
+
+    render(<StaffDashboard />);
+
+    // Start Serving button exists
+    const startServingBtn = await screen.findByRole('button', { name: /start serving patient/i });
+    expect(startServingBtn).toBeInTheDocument();
+
+    // Skip button opens ConfirmDialog
+    const skipBtn = screen.getByRole('button', { name: /skip patient/i });
+    skipBtn.click();
+
+    expect(await screen.findByText('Skip this patient?')).toBeInTheDocument();
+    const confirmBtn = screen.getByRole('button', { name: /^skip patient$/i });
+    confirmBtn.click();
+
+    await waitFor(() => {
+      expect(api.post).toHaveBeenCalledWith('/api/tokens/tok-call/skip', {
+        counterId: 'c1',
+      });
+    });
+  });
+
+  test('Complete Consultation sends complete action', async () => {
+    api.get.mockImplementation(async (url) => {
+      if (url === '/api/counters') {
+        return [{ id: 'c1', name: 'Counter 1', status: 'active', serviceId: 's1' }];
+      }
+      if (url === '/api/counters/c1/dashboard') {
+        return {
+          ...mockDashboardC1,
+          current: {
+            tokenId: 'tok-serve',
+            number: 22,
+            status: 'serving',
+            patientName: 'Alice',
+            priority: 1,
+          },
+        };
+      }
+      throw new Error(`Unexpected GET ${url}`);
+    });
+    api.post.mockResolvedValue({});
+
+    render(<StaffDashboard />);
+
+    const completeBtn = await screen.findByRole('button', { name: /complete service/i });
+    expect(completeBtn).toBeInTheDocument();
+    completeBtn.click();
+
+    await waitFor(() => {
+      expect(api.post).toHaveBeenCalledWith('/api/tokens/tok-serve/complete', {
+        counterId: 'c1',
+      });
+    });
+  });
 });

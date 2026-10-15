@@ -1,5 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { Bell, BellOff, BellRing, Share, X, CheckCircle2, AlertCircle } from 'lucide-react';
 import { usePushNotifications } from '../push/usePushNotifications';
+import { Button } from './ui/Button';
+import { cn } from '../lib/cn';
 
 export function PushNotificationCard() {
   const {
@@ -12,188 +15,158 @@ export function PushNotificationCard() {
     sendTest,
   } = usePushNotifications();
 
+  const [dismissed, setDismissed] = useState(false);
+
+  // If dismissed by user in this session (unless there's an active error or testSuccess)
+  if (dismissed && !error && !testSuccess) return null;
+
   return (
     <section
-      className="card push-notification-card"
+      className="mb-6 p-4 rounded-[var(--radius-card)] bg-paper border border-line text-ink transition-colors duration-200"
       aria-label="Push notifications settings"
-      style={{
-        padding: '1.25rem',
-        borderRadius: '8px',
-        border: '1px solid #e2e8f0',
-        backgroundColor: '#ffffff',
-        marginBottom: '1.5rem',
-      }}
     >
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'flex-start',
-          gap: '1rem',
-          flexWrap: 'wrap',
-        }}
-      >
-        <div style={{ flex: '1 1 280px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.4rem' }}>
-            <span style={{ fontSize: '1.25rem' }}>🔔</span>
-            <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 600 }}>
-              Get notified even when this page is closed
-            </h3>
-            {status === 'on' && (
-              <span
-                style={{
-                  backgroundColor: '#c6f6d5',
-                  color: '#22543d',
-                  fontSize: '0.75rem',
-                  fontWeight: 600,
-                  padding: '0.15rem 0.5rem',
-                  borderRadius: '4px',
-                }}
-              >
-                Enabled
-              </span>
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-start gap-3 flex-1 min-w-0">
+          <div
+            className={cn(
+              'w-9 h-9 rounded-full flex items-center justify-center shrink-0 mt-0.5',
+              status === 'on' ? 'bg-signal-tint text-signal' : 'bg-line-subtle text-slate'
             )}
-            {status === 'off' && (
-              <span
-                style={{
-                  backgroundColor: '#edf2f7',
-                  color: '#4a5568',
-                  fontSize: '0.75rem',
-                  fontWeight: 600,
-                  padding: '0.15rem 0.5rem',
-                  borderRadius: '4px',
-                }}
-              >
-                Off
-              </span>
-            )}
-            {status === 'blocked' && (
-              <span
-                style={{
-                  backgroundColor: '#fed7d7',
-                  color: '#742a2a',
-                  fontSize: '0.75rem',
-                  fontWeight: 600,
-                  padding: '0.15rem 0.5rem',
-                  borderRadius: '4px',
-                }}
-              >
-                Blocked
-              </span>
-            )}
-            {status === 'needs-install' && (
-              <span
-                style={{
-                  backgroundColor: '#feebc8',
-                  color: '#7b341e',
-                  fontSize: '0.75rem',
-                  fontWeight: 600,
-                  padding: '0.15rem 0.5rem',
-                  borderRadius: '4px',
-                }}
-              >
-                Add to Home Screen
-              </span>
+            aria-hidden="true"
+          >
+            {status === 'on' ? (
+              <BellRing className="w-4 h-4" />
+            ) : (
+              <Bell className="w-4 h-4" />
             )}
           </div>
 
-          <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.875rem', color: '#4a5568', lineHeight: 1.45 }}>
-            {status === 'on' &&
-              'Web push notifications are active. You will be alerted when your turn is near or your token is called.'}
-            {status === 'off' &&
-              'Never miss your turn. Enable notifications to receive timely alerts on this device even if you close the browser.'}
-            {status === 'needs-install' &&
-              'On iOS (iPhone/iPad), Web Push requires adding SmartQueue to your Home Screen: tap the Share button (square with arrow) at the bottom of Safari, then choose "Add to Home Screen".'}
-            {status === 'blocked' &&
-              'Notifications are blocked in your browser. To unblock: click the site settings / lock icon in your browser address bar and change Notifications to "Allow".'}
-            {status === 'unsupported' &&
-              'Web Push notifications are not supported in this browser. Please use modern Chrome, Edge, Firefox, or Safari.'}
-            {status === 'enabling' && 'Subscribing this device for push notifications...'}
-          </p>
+          <div className="flex-1 min-w-0 space-y-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="text-sm font-semibold text-ink leading-tight">
+                {status === 'on' ? 'Notifications active' : 'Get notified when your turn is near'}
+              </h3>
+              {status === 'on' && (
+                <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-signal-tint text-signal">
+                  Enabled
+                </span>
+              )}
+              {status === 'needs-install' && (
+                <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-led/20 text-[#995c00] dark:text-led">
+                  Install required
+                </span>
+              )}
+            </div>
 
-          {error && (
-            <p
-              style={{
-                margin: '0.5rem 0 0 0',
-                fontSize: '0.825rem',
-                color: '#c53030',
-                backgroundColor: '#fff5f5',
-                padding: '0.35rem 0.6rem',
-                borderRadius: '4px',
-              }}
-            >
-              {error}
-            </p>
-          )}
+            <div className="text-xs text-slate leading-relaxed">
+              {status === 'on' && (
+                <p>We will alert your phone when your turn is near or your token is called.</p>
+              )}
+              {status === 'off' && (
+                <p>Step away from the clinic with confidence. We’ll notify you when it’s time to head to the counter.</p>
+              )}
+              {status === 'needs-install' && (
+                <div className="mt-1 space-y-1 text-slate">
+                  <p>On iOS, push alerts require adding the app to your Home Screen:</p>
+                  <ol className="list-decimal list-inside space-y-0.5 font-medium text-ink">
+                    <li>Tap the Share button in Safari</li>
+                    <li>Select "Add to Home Screen"</li>
+                    <li>Open SmartQueue from your Home Screen</li>
+                  </ol>
+                </div>
+              )}
+              {status === 'blocked' && (
+                <p className="text-coral">
+                  Notifications are blocked in your browser. Click the lock or site settings icon in your address bar and change Notifications to "Allow".
+                </p>
+              )}
+              {status === 'unsupported' && (
+                <p>Push alerts are not supported by this browser. Keep this tab open to monitor your position.</p>
+              )}
+              {status === 'enabling' && <p>Subscribing device for notifications...</p>}
+            </div>
 
-          {testSuccess && (
-            <p
-              style={{
-                margin: '0.5rem 0 0 0',
-                fontSize: '0.825rem',
-                color: '#22543d',
-                backgroundColor: '#f0fff4',
-                padding: '0.35rem 0.6rem',
-                borderRadius: '4px',
-              }}
-            >
-              ✓ Test notification sent! Check your notification tray or lock screen.
-            </p>
-          )}
+            {error && (
+              <div
+                className="mt-2 text-xs text-coral bg-coral-tint p-2 rounded-[var(--radius-control)] border border-coral/20 flex items-center gap-1.5"
+                role="alert"
+              >
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            {testSuccess && (
+              <div
+                className="mt-2 text-xs text-signal bg-signal-tint p-2 rounded-[var(--radius-control)] border border-signal/20 flex items-center gap-1.5"
+                role="status"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                <span>Test notification sent. Check your device notifications.</span>
+              </div>
+            )}
+          </div>
         </div>
 
-        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+        {/* Right action / close */}
+        <div className="flex items-center gap-2 shrink-0">
           {status === 'on' && (
-            <>
-              <button
-                type="button"
-                className="btn btn-primary btn-sm"
+            <div className="flex items-center gap-1.5">
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={sendTest}
                 disabled={isTesting}
+                loading={isTesting}
                 aria-label="Send test notification"
               >
-                {isTesting ? 'Sending test...' : 'Test push'}
-              </button>
-              <button
-                type="button"
-                className="btn btn-outline btn-sm"
+                Test push
+              </Button>
+              <Button
+                variant="quiet"
+                size="sm"
                 onClick={disable}
                 aria-label="Disable push notifications"
               >
                 Disable
-              </button>
-            </>
+              </Button>
+            </div>
           )}
 
           {status === 'off' && (
-            <button
-              type="button"
-              className="btn btn-primary btn-sm"
+            <Button
+              variant="primary"
+              size="sm"
               onClick={enable}
               aria-label="Enable push notifications"
             >
-              Enable notifications
-            </button>
-          )}
-
-          {status === 'enabling' && (
-            <button type="button" className="btn btn-secondary btn-sm" disabled>
-              Enabling...
-            </button>
+              Enable
+            </Button>
           )}
 
           {status === 'error' && (
-            <button
-              type="button"
-              className="btn btn-primary btn-sm"
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={enable}
               aria-label="Retry enabling notifications"
             >
               Retry
-            </button>
+            </Button>
           )}
+
+          <button
+            type="button"
+            onClick={() => setDismissed(true)}
+            className="p-1 rounded text-slate hover:text-ink focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-signal"
+            aria-label="Dismiss notification card"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
       </div>
     </section>
   );
 }
+
+export default PushNotificationCard;

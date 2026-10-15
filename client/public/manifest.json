@@ -4,8 +4,8 @@
   "description": "Real-time Hospital OPD Queue Management",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#2563eb",
+  "background_color": "#F2F5F6",
+  "theme_color": "#0B8A7C",
   "icons": [
     {
       "src": "/icons/icon-192.png",

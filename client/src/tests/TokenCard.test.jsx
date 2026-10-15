@@ -29,9 +29,9 @@ describe('TokenCard Status Rendering', () => {
     );
 
     expect(screen.getByText('42')).toBeInTheDocument();
-    expect(screen.getByText('Waiting')).toBeInTheDocument();
+    expect(screen.getAllByText('Waiting')[0]).toBeInTheDocument();
     expect(screen.getByText(/People ahead of you:/i)).toBeInTheDocument();
-    expect(screen.getByText('5')).toBeInTheDocument();
+    expect(screen.getAllByText('5')[0]).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /cancel token/i })).toBeInTheDocument();
   });
 
@@ -51,7 +51,7 @@ describe('TokenCard Status Rendering', () => {
     );
 
     expect(screen.getByText('42')).toBeInTheDocument();
-    expect(screen.getByText('Called')).toBeInTheDocument();
+    expect(screen.getAllByText('Called')[0]).toBeInTheDocument();
     expect(
       screen.getByText(/Your turn! Please go to Desk 3/i)
     ).toBeInTheDocument();
@@ -75,7 +75,7 @@ describe('TokenCard Status Rendering', () => {
     );
 
     expect(screen.getByText('42')).toBeInTheDocument();
-    expect(screen.getByText('Serving')).toBeInTheDocument();
+    expect(screen.getAllByText('Serving')[0]).toBeInTheDocument();
     expect(screen.getByText(/Being served at/i)).toBeInTheDocument();
     expect(screen.getByText('Desk 1')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /cancel token/i })).not.toBeInTheDocument();
