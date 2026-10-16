@@ -156,3 +156,54 @@ Terminal: completed, skipped, no_show, cancelled
   - When 2 or more non-offline counters exist, the picker dropdown is displayed.
   - If a counter ID remembered in browser `localStorage` is no longer in the non-offline counter list, it is cleared immediately.
 
+## QR Join & Poster Workflow
+- **Route `/join/:serviceId`**:
+  - Unauthenticated users: redirect to `/login` with same-origin return URL stored in `sessionStorage` (`returnTo`). Non-same-origin paths are strictly rejected.
+  - Authenticated patients: displays service details (service name, hospital name, waiting count) with an explicit "Join queue" button. Page load NEVER auto-joins without user intent.
+  - Existing token holder: redirects directly to `/patient` to show their active token.
+  - Staff/Admin: displays an informational badge that staff cannot join patient queues, with a link to the dashboard.
+- **Staff Dashboard QR Poster**:
+  - Accessible dialog (`Show QR`) rendering an SVG QR code pointing to `<origin>/join/<serviceId>`.
+  - Includes a dedicated print stylesheet that strips all UI except the printable queue poster (service name, QR code, and "Scan to join the queue").
+- **Standalone CLI Generator**:
+  - `npm run qr -- <url> <out.svg>` writes standalone SVG posters.
+
+## Simulator Tools & Rate Limiter Bypass
+- **Simulator Auth Bypass**:
+  - Controlled by optional environment variable `SIMULATOR_KEY` (minimum 24 characters; inactive when unset).
+  - Production warning logged at startup when active.
+  - Incoming requests with header `x-simulator-key` matching `SIMULATOR_KEY` via constant-time comparison (`crypto.timingSafeEqual`) bypass ONLY the `/api/auth/*` IP rate limiter, allowing high-concurrency automated load from a single IP.
+- **Simulator CLI (`server/tools/sim/`)**:
+  - `npm run sim -- demo`: Simulates real-time OPD arrivals, random cancellations, emergency priority joins, and staff serving.
+  - `npm run sim -- burst`: Fires concurrent joins across pre-connected WebSockets to verify sequence contiguity and real-time convergence.
+  - `npm run sim:db`: Prepares ETA baselines and performs safe database cleanup with protection against deleting non-simulated records.
+
+## Internal Metrics Endpoint (`GET /internal/metrics`)
+- **Access Control**: Returns HTTP 404 unless `SIMULATOR_KEY` is configured AND incoming request provides a matching `x-simulator-key` header (constant-time verification).
+- **Payload Schema**:
+  - `uptime`: Server process uptime in seconds.
+  - `rssMB`: Process resident set size (MB).
+  - `heapUsedMB`: V8 heap memory currently used (MB).
+  - `cpu`: `{ userMs, systemMs }` CPU time diff since last sample.
+  - `eventLoopDelay`: Event loop delay histogram `{ p50, p95, p99, max }` in ms via `perf_hooks.monitorEventLoopDelay({ resolution: 20 })`, reset after each poll.
+  - `connectedSockets`: Live client socket count via `io.engine.clientsCount`.
+  - `jobQueue`: BullMQ job counts `{ timers: { waiting, active, completed, failed, delayed }, notify: { ... } }`.
+  - `jobsRunning`: Boolean indicating BullMQ worker status.
+
+## Headless Benchmark Harness (`bench/`)
+- **CLI Commands**:
+  - `npm run bench`: Spawns an ephemeral server on an isolated database (`smartqueue_bench`), executes benchmark scenarios, evaluates thresholds, and writes reports to `bench/reports/<timestamp>.json`, `.md`, and `latest.json`.
+  - `npm run bench:table`: Generates Markdown summary tables from `latest.json` ready for documentation.
+- **Workload Scenarios**:
+  - `burst`: $N \in [100, 250, 500]$ concurrent joins via REST while holding active WebSockets. Evaluates throughput, join latencies, sequence contiguity (1..N), zero duplicates, socket event convergence, and single-flight coalescing ratio.
+  - `flow`: 300 patients join and are served through complete lifecycle (`call-next` $\rightarrow$ `start` $\rightarrow$ `complete`) by an automated staff bot at accelerated speeds (100–300 ms). Measures `call-next`-to-`called` propagation latency, notification latency, queue drain rate, and asserts zero stuck tokens.
+  - `reconnect`: 200 connected and waiting patients dropped simultaneously. Measures reconnect storm duration and asserts 100% socket reconnection with 0 position mismatches and 0 stranded tokens.
+- **Correctness Invariants & Pass/Fail Thresholds**:
+  - Duplicate tokens: strictly 0 (always fails if >0).
+  - Contiguity: strictly required (always fails if gaps found).
+  - Stuck tokens: strictly 0 (always fails if any token incomplete).
+  - Failed requests: strictly 0.
+- **HTTP API Load Testing with k6 (`bench/k6-http.js`)**:
+  - Covers OTP verification, service listing, queue join, and token polling with ramping arrival rate executor.
+
+

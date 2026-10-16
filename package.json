@@ -14,6 +14,11 @@
     "seed": "npm --prefix server run seed --",
     "smoke": "npm --prefix server run smoke --",
     "watch": "npm --prefix server run watch --",
-    "vapid": "npm --prefix server run vapid"
+    "vapid": "npm --prefix server run vapid",
+    "qr": "npm --prefix server run qr --",
+    "sim": "npm --prefix server run sim --",
+    "sim:db": "npm --prefix server run sim:db --",
+    "bench": "node bench/index.js",
+    "bench:table": "node bench/table.js"
   }
 }

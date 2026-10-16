@@ -1,0 +1,89 @@
+{
+  "timestamp": 1792176591100,
+  "envInfo": {
+    "cpuModel": "13th Gen Intel(R) Core(TM) i5-1334U",
+    "cpuCores": 12,
+    "totalRamGb": 15.72,
+    "os": "Windows_NT 10.0.26200 (x64)",
+    "nodeVersion": "v20.19.6",
+    "gitCommit": "4ba0204",
+    "mongoVersion": "7.0.43",
+    "redisVersion": "7.4.11",
+    "apiUrl": "http://localhost:10050"
+  },
+  "summary": {
+    "total": 1,
+    "passedCount": 1,
+    "failedCount": 0,
+    "passed": true
+  },
+  "scenarios": [
+    {
+      "scenario": "reconnect",
+      "patientCount": 200,
+      "totalCount": 200,
+      "reconnectedCount": 200,
+      "strandedCount": 0,
+      "peopleAheadMismatches": 0,
+      "errors": 0,
+      "durationMs": 12266,
+      "percentiles": {
+        "count": 200,
+        "min": 6566,
+        "max": 12266,
+        "avg": 9207.59,
+        "p50": 8657.5,
+        "p90": 11622,
+        "p95": 11953,
+        "p99": 12193.58
+      },
+      "passed": true,
+      "failures": [],
+      "metrics": {
+        "sampleCount": 22,
+        "rssMB": {
+          "min": 96.19,
+          "max": 344.1,
+          "avg": 170.23
+        },
+        "heapUsedMB": {
+          "min": 29.15,
+          "max": 258.4,
+          "avg": 82.34
+        },
+        "cpuUserMs": {
+          "min": 0,
+          "max": 2250,
+          "avg": 607.23
+        },
+        "cpuSystemMs": {
+          "min": 15,
+          "max": 344,
+          "avg": 127.86
+        },
+        "eventLoopDelayP99": {
+          "min": 0,
+          "max": 2380.27,
+          "avg": 321.27
+        },
+        "connectedSocketsPeak": 200,
+        "lastJobQueue": {
+          "timers": {
+            "waiting": 0,
+            "active": 0,
+            "completed": 0,
+            "failed": 0,
+            "delayed": 0
+          },
+          "notify": {
+            "waiting": 0,
+            "active": 0,
+            "completed": 200,
+            "failed": 0,
+            "delayed": 0
+          }
+        }
+      }
+    }
+  ]
+}

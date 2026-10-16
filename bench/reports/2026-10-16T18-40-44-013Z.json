@@ -1,0 +1,261 @@
+{
+  "timestamp": 1792176044013,
+  "envInfo": {
+    "cpuModel": "13th Gen Intel(R) Core(TM) i5-1334U",
+    "cpuCores": 12,
+    "totalRamGb": 15.72,
+    "os": "Windows_NT 10.0.26200 (x64)",
+    "nodeVersion": "v20.19.6",
+    "gitCommit": "4ba0204",
+    "mongoVersion": "7.0.43",
+    "redisVersion": "7.4.11",
+    "apiUrl": "http://localhost:10050"
+  },
+  "summary": {
+    "total": 3,
+    "passedCount": 0,
+    "failedCount": 3,
+    "passed": false
+  },
+  "scenarios": [
+    {
+      "scenario": "burst",
+      "patientCount": 100,
+      "totalCount": 100,
+      "successfulCount": 100,
+      "errors": 0,
+      "durationMs": 4086,
+      "throughputReqPerSec": 24.47,
+      "percentiles": {
+        "count": 100,
+        "min": 2124,
+        "max": 4028,
+        "avg": 3544.21,
+        "p50": 3561,
+        "p90": 3731.2,
+        "p95": 3742,
+        "p99": 4027.01
+      },
+      "hasDuplicates": false,
+      "duplicateCount": 0,
+      "isContiguous": true,
+      "convergenceTimeMs": 4367,
+      "isConverged": true,
+      "coalescing": {
+        "avgQueueUpdates": 2.82,
+        "minQueueUpdates": 1,
+        "maxQueueUpdates": 5,
+        "ratio": 0.0282
+      },
+      "passed": false,
+      "failures": [
+        "Join latency p95 (3742ms) exceeded threshold (3500ms)"
+      ],
+      "metrics": {
+        "sampleCount": 11,
+        "rssMB": {
+          "min": 71.46,
+          "max": 109.71,
+          "avg": 93.87
+        },
+        "heapUsedMB": {
+          "min": 28.62,
+          "max": 42.69,
+          "avg": 34.12
+        },
+        "cpuUserMs": {
+          "min": 16,
+          "max": 1125,
+          "avg": 375
+        },
+        "cpuSystemMs": {
+          "min": 0,
+          "max": 203,
+          "avg": 54
+        },
+        "eventLoopDelayP99": {
+          "min": 0,
+          "max": 1505.76,
+          "avg": 454.09
+        },
+        "connectedSocketsPeak": 100,
+        "lastJobQueue": {
+          "timers": {
+            "waiting": 0,
+            "active": 0,
+            "completed": 0,
+            "failed": 0,
+            "delayed": 0
+          },
+          "notify": {
+            "waiting": 0,
+            "active": 2,
+            "completed": 200,
+            "failed": 0,
+            "delayed": 0
+          }
+        }
+      }
+    },
+    {
+      "scenario": "burst",
+      "patientCount": 250,
+      "totalCount": 250,
+      "successfulCount": 250,
+      "errors": 0,
+      "durationMs": 10134,
+      "throughputReqPerSec": 24.67,
+      "percentiles": {
+        "count": 250,
+        "min": 5576,
+        "max": 9663,
+        "avg": 7220.65,
+        "p50": 7467,
+        "p90": 8108.1,
+        "p95": 8307.95,
+        "p99": 8914.3
+      },
+      "hasDuplicates": false,
+      "duplicateCount": 0,
+      "isContiguous": true,
+      "convergenceTimeMs": 10597,
+      "isConverged": true,
+      "coalescing": {
+        "avgQueueUpdates": 3.1,
+        "minQueueUpdates": 2,
+        "maxQueueUpdates": 4,
+        "ratio": 0.0124
+      },
+      "passed": false,
+      "failures": [
+        "Join latency p95 (8307.95ms) exceeded threshold (3500ms)"
+      ],
+      "metrics": {
+        "sampleCount": 21,
+        "rssMB": {
+          "min": 98.04,
+          "max": 124.45,
+          "avg": 116.56
+        },
+        "heapUsedMB": {
+          "min": 38.44,
+          "max": 54.3,
+          "avg": 46.8
+        },
+        "cpuUserMs": {
+          "min": 0,
+          "max": 1906,
+          "avg": 372.05
+        },
+        "cpuSystemMs": {
+          "min": 0,
+          "max": 281,
+          "avg": 46.9
+        },
+        "eventLoopDelayP99": {
+          "min": 0,
+          "max": 2397.04,
+          "avg": 539.86
+        },
+        "connectedSocketsPeak": 250,
+        "lastJobQueue": {
+          "timers": {
+            "waiting": 0,
+            "active": 0,
+            "completed": 0,
+            "failed": 0,
+            "delayed": 0
+          },
+          "notify": {
+            "waiting": 1,
+            "active": 3,
+            "completed": 34,
+            "failed": 0,
+            "delayed": 0
+          }
+        }
+      }
+    },
+    {
+      "scenario": "burst",
+      "patientCount": 500,
+      "totalCount": 500,
+      "successfulCount": 362,
+      "errors": 138,
+      "durationMs": 28122,
+      "throughputReqPerSec": 12.87,
+      "percentiles": {
+        "count": 362,
+        "min": 3118,
+        "max": 27556,
+        "avg": 20385.51,
+        "p50": 19149,
+        "p90": 26599.8,
+        "p95": 27006.75,
+        "p99": 27071.78
+      },
+      "hasDuplicates": false,
+      "duplicateCount": 0,
+      "isContiguous": true,
+      "convergenceTimeMs": 28315,
+      "isConverged": true,
+      "coalescing": {
+        "avgQueueUpdates": 2.67,
+        "minQueueUpdates": 0,
+        "maxQueueUpdates": 7,
+        "ratio": 0.00534
+      },
+      "passed": false,
+      "failures": [
+        "Errors encountered during burst joins: 138",
+        "Join latency p95 (27006.75ms) exceeded threshold (3500ms)",
+        "Convergence time (28315ms) exceeded threshold (20000ms)"
+      ],
+      "metrics": {
+        "sampleCount": 49,
+        "rssMB": {
+          "min": 122.24,
+          "max": 140.54,
+          "avg": 129.93
+        },
+        "heapUsedMB": {
+          "min": 34.71,
+          "max": 59.55,
+          "avg": 49.76
+        },
+        "cpuUserMs": {
+          "min": 0,
+          "max": 1719,
+          "avg": 278.06
+        },
+        "cpuSystemMs": {
+          "min": 0,
+          "max": 203,
+          "avg": 34.76
+        },
+        "eventLoopDelayP99": {
+          "min": 0,
+          "max": 6555.7,
+          "avg": 476.04
+        },
+        "connectedSocketsPeak": 500,
+        "lastJobQueue": {
+          "timers": {
+            "waiting": 0,
+            "active": 0,
+            "completed": 0,
+            "failed": 0,
+            "delayed": 0
+          },
+          "notify": {
+            "waiting": 0,
+            "active": 3,
+            "completed": 15,
+            "failed": 0,
+            "delayed": 0
+          }
+        }
+      }
+    }
+  ]
+}

@@ -7,13 +7,35 @@ const AppError = require('../utils/AppError');
 
 const router = express.Router();
 
-// Rate-limit /api/auth/* to 10 requests per minute per IP (disabled in tests)
+const crypto = require('crypto');
+const env = require('../config/env');
+
+function checkSimulatorKey(headerKey) {
+  const configuredKey = process.env.SIMULATOR_KEY || env.SIMULATOR_KEY;
+  if (!configuredKey || !headerKey || typeof headerKey !== 'string') {
+    return false;
+  }
+  const keyBuf = Buffer.from(configuredKey);
+  const headerBuf = Buffer.from(headerKey);
+  if (keyBuf.length !== headerBuf.length) {
+    return false;
+  }
+  return crypto.timingSafeEqual(keyBuf, headerBuf);
+}
+
+// Rate-limit /api/auth/* to 10 requests per minute per IP (disabled in tests unless enabled)
 const authLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
-  skip: (req) => process.env.NODE_ENV === 'test' && !req.app?.get('enableRateLimitForTest'),
+  skip: (req) => {
+    // Simulator bypass: matching x-simulator-key skips ONLY the auth rate limiter
+    if (checkSimulatorKey(req.headers['x-simulator-key'])) {
+      return true;
+    }
+    return process.env.NODE_ENV === 'test' && !req.app?.get('enableRateLimitForTest');
+  },
   handler: (_req, _res, next) => {
     next(
       new AppError(

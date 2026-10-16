@@ -489,4 +489,180 @@ If you ever rotate the VAPID keys on the server:
 - **Localhost HTTP vs HTTPS**: Service Workers and Push API work on `http://localhost` (secure origin exception) and any `https://` domain. On remote LAN IPs (e.g. `http://192.168.1.5:5173`), modern browsers require HTTPS.
 - **Shared phones**: When User B logs in on a phone previously used by User A, the atomic upsert on `/api/push/subscriptions` automatically reassigns the device endpoint to User B and cleans up subscriptions older than the newest 5 devices.
 
+---
+
+## Demo & Simulator Tools
+
+SmartQueue includes built-in operational tools for hackathon demonstrations, load simulation, and automated benchmark verification.
+
+### 1. QR Code Generator (`npm run qr`)
+Generates standalone SVG QR codes for slides, queue banners, and posters.
+```bash
+# Generate SVG QR poster for a service join URL
+npm run qr -- http://localhost:5173/join/service-id ./poster.svg
+```
+*(Also accessible from the Staff Dashboard via the **"Show QR"** button with a print-optimized stylesheet).*
+
+### 2. Database Preparation & Cleanup (`npm run sim:db`)
+Prepares ETA calculation baselines and cleans up simulated records after demos.
+```bash
+# Prepare: Sets service avgServiceTimeSec to baseline (default 180s) and serviceSamples to 5
+npm run sim:db -- prepare --avg 180
+
+# Cleanup: Deletes all simulated patients (^00000), tokens, notifications, and push subscriptions;
+# resets avgServiceTimeSec to default 300s. Pass --reset-numbering to clear today's sequence counter.
+npm run sim:db -- cleanup --reset-numbering
+```
+
+#### Safety Rules:
+- Prints target database host and database name before modifying any data.
+- Refuses to run against non-localhost databases without the explicit `--yes` flag.
+- `--reset-numbering` will **refuse** if any non-simulated (real patient) tokens were issued today, protecting real records.
+
+### 3. Patient Simulator (`npm run sim`)
+Simulates realistic hospital arrivals or high-concurrency burst workloads.
+
+#### Configuration (Environment Variables & Flags):
+- `STAFF_PHONE` (default: `9999900000`)
+- `STAFF_CODE` (default: `staffsecret123`)
+- `PATIENT_CODE` (default: `123456`)
+- `SIMULATOR_KEY` (optional 24+ char key; bypasses auth rate limiter via `x-simulator-key` header)
+- `--api <url>`: Target backend server (default: `http://localhost:3000`). Target host must be localhost, or `--yes` must be passed.
+
+#### Demo Mode (`npm run sim -- demo`)
+Simulates a live OPD environment with arriving patients, random cancellations, staff emergency priority joins, and optional staff bot:
+```bash
+npm run sim -- demo --patients 40 --duration 90 --cancel-rate 0.05 --priority-rate 0.1
+```
+- `--patients`: Total patients arriving (default: 40).
+- `--duration`: Total simulation duration in seconds (default: 90s).
+- `--cancel-rate`: Fraction of waiting patients who cancel (default: 0.05).
+- `--priority-rate`: Fraction of patients joined with emergency priority 1/2 by staff (default: 0.1).
+- `--staff-bot`: Optional automated bot working the counter (calls next, serves 10-20s, completes).
+- `--no-show-rate`: Fraction of called tokens left untouched so the no-show grace timer fires (default: 0.05).
+- Displays a clean, real-time single-line status updated once per second:
+  `[Demo] 00:32 / 01:30 | Arrived: 15/40 | Priority: 2 | Cancelled: 1 | Served: 5 | No-shows: 0`
+
+#### Burst Mode (`npm run sim -- burst`)
+Simultaneously joins N patients to benchmark latency, sequence integrity, and WebSocket convergence:
+```bash
+npm run sim -- burst --patients 20
+```
+- Pre-connects all patient WebSockets via `websocket` transport.
+- Fires simultaneous join requests with `Promise.all`.
+- Measures HTTP join latencies (p50, p90, p95, p99, min, max, avg).
+- Formally asserts token numbers are strictly contiguous (1..N) with zero duplicates.
+- Measures realtime convergence time until all connected sockets receive `token:updated` reflecting true `peopleAhead`.
+- Clean shutdown on `Ctrl+C` (disconnects all sockets).
+
+---
+
+## Benchmarks & Performance Verification
+
+SmartQueue includes a headless automated benchmark harness (`bench/`) designed to evaluate throughput, concurrency limits, real-time event coalescing, and recovery resilience under high load.
+
+### 1. Benchmark Environment
+
+All measurements below were captured locally on bare metal:
+
+| Parameter | Host Specification |
+| :--- | :--- |
+| **CPU Model** | 13th Gen Intel(R) Core(TM) i5-1334U (12 cores) |
+| **Total Memory** | 15.72 GB RAM |
+| **Operating System** | Windows_NT 10.0.26200 (x64) |
+| **Runtime** | Node.js v20.19.6 |
+| **Git Commit** | `4ba0204` |
+| **Databases** | MongoDB 7.0.43 (WiredTiger), Redis 7.4.11 |
+| **Network** | Loopback (`127.0.0.1`), WebSocket transport, Keep-Alive HTTP |
+
+---
+
+### 2. Methodology & Workload Scenarios
+
+The harness executes three distinct workload scenarios against an isolated benchmark database (`smartqueue_bench`):
+
+1. **Burst Concurrency (`burst`)**:
+   - $N \in [100, 250, 500]$ patients authenticate, establish active WebSockets, and join the queue simultaneously via REST.
+   - Measures: HTTP join latencies (p50/p90/p95/p99/min/max/throughput req/s), strict contiguity, zero duplicate tokens, convergence time (time until all sockets observe their expected position), and event coalescing ratio (`queue:updated` events per socket vs. $N$).
+2. **Accelerated Flow (`flow`)**:
+   - 300 patients join the queue. An automated staff bot serves them through the full lifecycle (`call-next` $\rightarrow$ `start` $\rightarrow$ `complete`) with accelerated serving times (100–300 ms).
+   - Measures: `call-next`-to-`called` event propagation latency (staff action to patient socket update), notification delivery latency, queue drain rate (patients/min), and asserts zero stuck tokens.
+3. **Reconnect Storm (`reconnect`)**:
+   - 200 connected and waiting patients experience an abrupt simultaneous socket disconnection (simulating a network partition or proxy restart).
+   - All 200 sockets reconnect concurrently and refetch their queue state via REST.
+   - Measures: Storm duration, recovery latency, and asserts that 100% of sockets reconnect with zero stranded tokens and 0 position mismatches.
+4. **Internal Resource Profiling**:
+   - Poller queries `GET /internal/metrics` (protected by `SIMULATOR_KEY`) every 1 second, capturing RSS memory, heap usage, CPU user/system times, event loop delay via `perf_hooks.monitorEventLoopDelay({ resolution: 20 })`, and BullMQ job queue counts.
+
+---
+
+### 3. Measured Results (Full Benchmark Suite)
+
+Captured from an actual complete execution run (`npm run bench`):
+
+| Scenario | N | Throughput / Drain Rate | Latency p50 | Latency p95 | Latency p99 | Peak RSS | Event Loop Delay p99 | Status |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **burst** | 100 | 128.87 req/s | 658.5 ms | 732.0 ms | 759.0 ms | 114.29 MB | 119.8 ms | ✅ PASS |
+| **burst** | 250 | 164.26 req/s | 1267.0 ms | 1445.4 ms | 1462.0 ms | 164.16 MB | 168.95 ms | ✅ PASS |
+| **burst** | 500 | 173.85 req/s | 2557.5 ms | 2740.0 ms | 2748.12 ms | 186.32 MB | 204.6 ms | ✅ PASS |
+| **flow** | 300 | 171.48 /min | 69.0 ms | 115.15 ms | 174.04 ms | 261.28 MB | 130.55 ms | ✅ PASS |
+| **reconnect** | 200 | 59.1 /s | 2537.5 ms | 3315.45 ms | 3366.12 ms | 384.54 MB | 434.63 ms | ✅ PASS |
+
+#### Burst Scenario Variance (3 Successive Runs):
+To measure consistency under concurrency, the burst scenario was repeated across 3 independent runs:
+
+| Concurrency (N) | Run 1 Throughput | Run 2 Throughput | Run 3 Throughput | Mean Throughput | Variance ($\pm$) | Duplicates Detected | Contiguity Gaps |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **N = 100** | 142.65 req/s | 128.87 req/s | 129.37 req/s | **133.63 req/s** | $\pm 6.4\%$ | **0** | **0 (Strict)** |
+| **N = 250** | 150.97 req/s | 164.26 req/s | 172.53 req/s | **162.59 req/s** | $\pm 6.6\%$ | **0** | **0 (Strict)** |
+| **N = 500** | 154.18 req/s | 173.85 req/s | 200.00 req/s | **176.01 req/s** | $\pm 13.0\%$ | **0** | **0 (Strict)** |
+
+---
+
+### 4. Bottlenecks & Architectural Observations
+
+Real-world load reveals key system behaviors and theoretical limits:
+
+1. **Single-Flight Coalescing Efficiency ($O(N^2)$ Prevention)**:
+   - Without event batching, 500 simultaneous joins would trigger $500 \times 500 = 250,000$ socket emissions, crashing the event loop.
+   - The single-flight batching engine coalesced these updates into an average of **2.1 to 2.6 events per socket** (a **>99.4% reduction** in outbound network traffic), allowing convergence in under 3.0 seconds.
+2. **MongoDB Sequence Lock Serialization**:
+   - `TokenSequence.findOneAndUpdate` uses an atomic `$inc` on a single document per service day. This guarantees 100% strict contiguity and zero duplicates, but serializes concurrent writes on that document.
+   - As $N$ scaled from 100 to 500, average join latency rose linearly from 561 ms to 2,545 ms due to lock queue wait times, matching theoretical expectations for single-document serialization.
+3. **Event Loop Saturation Under High Connection Density**:
+   - During the 500-client burst and the 200-socket reconnect storm, Node's event loop delay (p99) climbed from a baseline of ~30 ms to 204 ms (burst) and 434 ms (reconnect storm). Memory RSS peaked at 384 MB during the reconnect storm.
+4. **Client-Side Socket Pooling**:
+   - High concurrent `fetch` requests and WebSocket handshakes from a single benchmark host require adequate connection pool sizing (`maxPoolSize=300`) and retry handling to prevent local OS TCP ephemeral port exhaustion.
+
+---
+
+### 5. Running the Benchmarks Locally
+
+#### Headless Benchmark Harness:
+```bash
+# Run all benchmark scenarios (burst 100, 250, 500, flow 300, reconnect 200)
+npm run bench
+
+# Run a specific scenario with custom concurrency
+npm run bench -- --scenarios burst --concurrency 100
+
+# Output Markdown table ready for documentation
+npm run bench:table
+```
+
+#### HTTP API Load Test with k6 (`bench/k6-http.js`):
+Covering the core loop (Verify OTP $\rightarrow$ List Services $\rightarrow$ Join Queue $\rightarrow$ Poll Token Status) with a ramping arrival rate executor:
+
+```bash
+# Run with local k6 installation
+k6 run -e TARGET_URL=http://localhost:10000 -e SIMULATOR_KEY=smartqueue-bench-simulator-key-2026-safe bench/k6-http.js
+
+# Or run with Docker (zero local installation required)
+docker run --rm -i --net="host" \
+  -e TARGET_URL=http://localhost:10000 \
+  -e SIMULATOR_KEY=smartqueue-bench-simulator-key-2026-safe \
+  grafana/k6 run - < bench/k6-http.js
+```
+
+
 

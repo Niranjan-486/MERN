@@ -1,0 +1,253 @@
+{
+  "timestamp": 1792177731562,
+  "envInfo": {
+    "cpuModel": "13th Gen Intel(R) Core(TM) i5-1334U",
+    "cpuCores": 12,
+    "totalRamGb": 15.72,
+    "os": "Windows_NT 10.0.26200 (x64)",
+    "nodeVersion": "v20.19.6",
+    "gitCommit": "4ba0204",
+    "mongoVersion": "7.0.43",
+    "redisVersion": "7.4.11",
+    "apiUrl": "http://localhost:10050"
+  },
+  "summary": {
+    "total": 3,
+    "passedCount": 3,
+    "failedCount": 0,
+    "passed": true
+  },
+  "scenarios": [
+    {
+      "scenario": "burst",
+      "patientCount": 100,
+      "totalCount": 100,
+      "successfulCount": 100,
+      "errors": 0,
+      "durationMs": 773,
+      "throughputReqPerSec": 129.37,
+      "percentiles": {
+        "count": 100,
+        "min": 277,
+        "max": 750,
+        "avg": 574.47,
+        "p50": 626.5,
+        "p90": 711.2,
+        "p95": 715.05,
+        "p99": 742.08
+      },
+      "hasDuplicates": false,
+      "duplicateCount": 0,
+      "isContiguous": true,
+      "convergenceTimeMs": 861,
+      "isConverged": true,
+      "coalescing": {
+        "avgQueueUpdates": 2.98,
+        "minQueueUpdates": 2,
+        "maxQueueUpdates": 3,
+        "ratio": 0.0298
+      },
+      "passed": true,
+      "failures": [],
+      "metrics": {
+        "sampleCount": 2,
+        "rssMB": {
+          "min": 92.4,
+          "max": 114.45,
+          "avg": 103.43
+        },
+        "heapUsedMB": {
+          "min": 29.24,
+          "max": 48.25,
+          "avg": 38.74
+        },
+        "cpuUserMs": {
+          "min": 125,
+          "max": 1203,
+          "avg": 664
+        },
+        "cpuSystemMs": {
+          "min": 94,
+          "max": 172,
+          "avg": 133
+        },
+        "eventLoopDelayP99": {
+          "min": 42.76,
+          "max": 140.77,
+          "avg": 91.77
+        },
+        "connectedSocketsPeak": 100,
+        "lastJobQueue": {
+          "timers": {
+            "waiting": 0,
+            "active": 0,
+            "completed": 0,
+            "failed": 0,
+            "delayed": 0
+          },
+          "notify": {
+            "waiting": 0,
+            "active": 0,
+            "completed": 200,
+            "failed": 0,
+            "delayed": 0
+          }
+        }
+      }
+    },
+    {
+      "scenario": "burst",
+      "patientCount": 250,
+      "totalCount": 250,
+      "successfulCount": 250,
+      "errors": 0,
+      "durationMs": 1449,
+      "throughputReqPerSec": 172.53,
+      "percentiles": {
+        "count": 250,
+        "min": 784,
+        "max": 1425,
+        "avg": 1172.28,
+        "p50": 1206,
+        "p90": 1381,
+        "p95": 1386.55,
+        "p99": 1402
+      },
+      "hasDuplicates": false,
+      "duplicateCount": 0,
+      "isContiguous": true,
+      "convergenceTimeMs": 1542,
+      "isConverged": true,
+      "coalescing": {
+        "avgQueueUpdates": 2.34,
+        "minQueueUpdates": 1,
+        "maxQueueUpdates": 3,
+        "ratio": 0.00936
+      },
+      "passed": true,
+      "failures": [],
+      "metrics": {
+        "sampleCount": 4,
+        "rssMB": {
+          "min": 120.23,
+          "max": 164.8,
+          "avg": 140.17
+        },
+        "heapUsedMB": {
+          "min": 44.14,
+          "max": 76.64,
+          "avg": 61.38
+        },
+        "cpuUserMs": {
+          "min": 609,
+          "max": 1204,
+          "avg": 929.75
+        },
+        "cpuSystemMs": {
+          "min": 47,
+          "max": 94,
+          "avg": 70.25
+        },
+        "eventLoopDelayP99": {
+          "min": 57.61,
+          "max": 209.45,
+          "avg": 118.28
+        },
+        "connectedSocketsPeak": 250,
+        "lastJobQueue": {
+          "timers": {
+            "waiting": 0,
+            "active": 0,
+            "completed": 0,
+            "failed": 0,
+            "delayed": 0
+          },
+          "notify": {
+            "waiting": 0,
+            "active": 2,
+            "completed": 200,
+            "failed": 0,
+            "delayed": 0
+          }
+        }
+      }
+    },
+    {
+      "scenario": "burst",
+      "patientCount": 500,
+      "totalCount": 500,
+      "successfulCount": 500,
+      "errors": 0,
+      "durationMs": 2500,
+      "throughputReqPerSec": 200,
+      "percentiles": {
+        "count": 500,
+        "min": 362,
+        "max": 2461,
+        "avg": 2058.96,
+        "p50": 2185.5,
+        "p90": 2379.4,
+        "p95": 2398,
+        "p99": 2411.03
+      },
+      "hasDuplicates": false,
+      "duplicateCount": 0,
+      "isContiguous": true,
+      "convergenceTimeMs": 2579,
+      "isConverged": true,
+      "coalescing": {
+        "avgQueueUpdates": 1.53,
+        "minQueueUpdates": 1,
+        "maxQueueUpdates": 4,
+        "ratio": 0.0030600000000000002
+      },
+      "passed": true,
+      "failures": [],
+      "metrics": {
+        "sampleCount": 6,
+        "rssMB": {
+          "min": 152.8,
+          "max": 188.09,
+          "avg": 171.43
+        },
+        "heapUsedMB": {
+          "min": 63.16,
+          "max": 92.09,
+          "avg": 73.48
+        },
+        "cpuUserMs": {
+          "min": 187,
+          "max": 1860,
+          "avg": 880.17
+        },
+        "cpuSystemMs": {
+          "min": 31,
+          "max": 188,
+          "avg": 99
+        },
+        "eventLoopDelayP99": {
+          "min": 43.38,
+          "max": 155.32,
+          "avg": 75.8
+        },
+        "connectedSocketsPeak": 500,
+        "lastJobQueue": {
+          "timers": {
+            "waiting": 0,
+            "active": 0,
+            "completed": 0,
+            "failed": 0,
+            "delayed": 0
+          },
+          "notify": {
+            "waiting": 0,
+            "active": 0,
+            "completed": 200,
+            "failed": 0,
+            "delayed": 0
+          }
+        }
+      }
+    }
+  ]
+}

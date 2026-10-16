@@ -53,6 +53,7 @@ const env = {
   VAPID_PUBLIC_KEY: process.env.VAPID_PUBLIC_KEY || '',
   VAPID_PRIVATE_KEY: process.env.VAPID_PRIVATE_KEY || '',
   VAPID_SUBJECT: process.env.VAPID_SUBJECT || '',
+  SIMULATOR_KEY: process.env.SIMULATOR_KEY || '',
 };
 
 function validateVapidConfig({ publicKey, privateKey, subject } = {}) {
@@ -92,6 +93,14 @@ if (clientOrigins.length === 0) {
 }
 if (!isTest && !env.MONGODB_URI) {
   throw new Error('Config error: MONGODB_URI is required. Please set MONGODB_URI (or MONGO_URI).');
+}
+if (env.SIMULATOR_KEY) {
+  if (env.SIMULATOR_KEY.length < 24) {
+    throw new Error('Config error: SIMULATOR_KEY must be at least 24 characters long');
+  }
+  if (env.NODE_ENV === 'production') {
+    console.warn('WARNING: SIMULATOR_KEY is set in production. Unset it after the demo.');
+  }
 }
 
 // If push channel is active, validate VAPID configuration immediately

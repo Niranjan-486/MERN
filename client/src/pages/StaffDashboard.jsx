@@ -9,7 +9,12 @@ import {
   Activity,
   Layers,
   AlertCircle,
+  QrCode,
+  Printer,
+  X,
 } from 'lucide-react';
+import * as Dialog from '@radix-ui/react-dialog';
+import { QRCodeSVG } from 'qrcode.react';
 import { useAuth } from '../auth/AuthContext';
 import { useSocket } from '../realtime/SocketProvider';
 import { api } from '../lib/api';
@@ -36,6 +41,7 @@ export function StaffDashboard() {
   const [actionInFlight, setActionInFlight] = useState(false);
   const [error, setError] = useState(null);
   const [isSkipDialogOpen, setIsSkipDialogOpen] = useState(false);
+  const [isQrDialogOpen, setIsQrDialogOpen] = useState(false);
 
   const primaryActionRef = useRef(null);
 
@@ -341,24 +347,38 @@ export function StaffDashboard() {
                 </p>
               </div>
 
-              {/* Call Next Button in Banner */}
+              {/* Call Next & Show QR Buttons in Banner */}
               <div className="flex flex-col sm:items-end gap-1">
-                <Button
-                  ref={!isHoldingToken ? primaryActionRef : undefined}
-                  variant="primary"
-                  size="default"
-                  onClick={handleCallNext}
-                  disabled={isCallNextDisabled}
-                  loading={actionInFlight && !isHoldingToken}
-                  aria-label="Call next patient"
-                  className="w-full sm:w-auto"
-                >
-                  <PhoneCall className="w-4 h-4 mr-2" aria-hidden="true" />
-                  <span>Call Next</span>
-                  <kbd className="ml-2 px-1.5 py-0.5 text-[10px] uppercase font-mono tracking-wider bg-white/20 rounded">
-                    Space
-                  </kbd>
-                </Button>
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  {dashboard?.service?.id && (
+                    <Button
+                      variant="secondary"
+                      size="default"
+                      onClick={() => setIsQrDialogOpen(true)}
+                      aria-label="Show QR code for this service"
+                      className="w-full sm:w-auto"
+                    >
+                      <QrCode className="w-4 h-4 mr-2" aria-hidden="true" />
+                      <span>Show QR</span>
+                    </Button>
+                  )}
+                  <Button
+                    ref={!isHoldingToken ? primaryActionRef : undefined}
+                    variant="primary"
+                    size="default"
+                    onClick={handleCallNext}
+                    disabled={isCallNextDisabled}
+                    loading={actionInFlight && !isHoldingToken}
+                    aria-label="Call next patient"
+                    className="w-full sm:w-auto"
+                  >
+                    <PhoneCall className="w-4 h-4 mr-2" aria-hidden="true" />
+                    <span>Call Next</span>
+                    <kbd className="ml-2 px-1.5 py-0.5 text-[10px] uppercase font-mono tracking-wider bg-white/20 rounded">
+                      Space
+                    </kbd>
+                  </Button>
+                </div>
                 {isHoldingToken && (
                   <span className="text-[11px] text-slate">
                     Complete current patient before calling next
@@ -607,6 +627,63 @@ export function StaffDashboard() {
         isLoading={actionInFlight}
         onConfirm={handleSkipConfirm}
       />
+
+      {/* Service QR Code Dialog */}
+      <Dialog.Root open={isQrDialogOpen} onOpenChange={setIsQrDialogOpen}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs no-print" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-full max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-[var(--radius-card)] bg-paper p-6 shadow-xl border border-line focus:outline-none qr-print-poster">
+            <div className="flex items-center justify-between no-print mb-2 w-full">
+              <span className="text-xs font-semibold text-slate uppercase tracking-wider">Queue QR Code</span>
+              <Dialog.Close asChild>
+                <button
+                  type="button"
+                  className="p-1 rounded text-slate hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal"
+                  aria-label="Close QR dialog"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </Dialog.Close>
+            </div>
+
+            <div className="text-center space-y-3 w-full">
+              <Dialog.Title className="text-2xl font-bold text-ink tracking-tight">
+                {dashboard?.service?.name || 'General OPD'}
+              </Dialog.Title>
+              <p className="text-sm font-medium text-slate">Scan to join the queue</p>
+
+              <div className="p-4 bg-white rounded-[var(--radius-card)] border border-line inline-block mx-auto shadow-xs">
+                <QRCodeSVG
+                  value={typeof window !== 'undefined' ? `${window.location.origin}/join/${dashboard?.service?.id || ''}` : ''}
+                  size={220}
+                  level="H"
+                />
+              </div>
+
+              <p className="text-[11px] font-mono text-slate break-all select-all no-print">
+                {typeof window !== 'undefined' ? `${window.location.origin}/join/${dashboard?.service?.id || ''}` : ''}
+              </p>
+            </div>
+
+            <div className="mt-5 flex gap-2.5 w-full no-print">
+              <Button
+                variant="primary"
+                className="flex-1 justify-center"
+                onClick={() => window.print()}
+                aria-label="Print queue poster"
+              >
+                <Printer className="w-4 h-4 mr-2" aria-hidden="true" />
+                <span>Print</span>
+              </Button>
+              <Dialog.Close asChild>
+                <Button variant="secondary" className="flex-1 justify-center">
+                  Close
+                </Button>
+              </Dialog.Close>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
     </div>
   );
 }

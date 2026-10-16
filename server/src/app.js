@@ -9,6 +9,7 @@ const servicesRouter = require('./routes/services');
 const countersRouter = require('./routes/counters');
 const tokensRouter = require('./routes/tokens');
 const pushRouter = require('./routes/push');
+const internalRouter = require('./routes/internal');
 const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
@@ -30,6 +31,7 @@ app.use(express.json());
 // Probes
 app.use('/health', healthRouter);
 app.use('/ready', readyRouter);
+app.use('/internal', internalRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/me', meRouter);
 app.use('/api/services', servicesRouter);

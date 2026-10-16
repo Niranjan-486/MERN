@@ -13,7 +13,12 @@
     "seed": "node src/scripts/seed.js",
     "smoke": "node scripts/smoke.js",
     "watch": "node src/scripts/watch.js",
-    "vapid": "node src/scripts/generateVapid.js"
+    "vapid": "node src/scripts/generateVapid.js",
+    "qr": "node tools/qr.js",
+    "sim": "node tools/sim/index.js",
+    "sim:db": "node tools/sim/db.js",
+    "bench": "node ../bench/index.js",
+    "bench:table": "node ../bench/table.js"
   },
   "dependencies": {
     "bullmq": "^6.3.12",
@@ -24,6 +29,7 @@
     "ioredis": "^6.0.0",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^8.7.0",
+    "qrcode": "^1.5.4",
     "socket.io": "^4.8.4",
     "socket.io-client": "^4.8.4",
     "web-push": "^3.6.7"

@@ -1,0 +1,411 @@
+{
+  "timestamp": 1792175450254,
+  "envInfo": {
+    "cpuModel": "13th Gen Intel(R) Core(TM) i5-1334U",
+    "cpuCores": 12,
+    "totalRamGb": 15.72,
+    "os": "Windows_NT 10.0.26200 (x64)",
+    "nodeVersion": "v20.19.6",
+    "gitCommit": "4ba0204",
+    "mongoVersion": "7.0.43",
+    "redisVersion": "7.4.11",
+    "apiUrl": "http://localhost:10050"
+  },
+  "summary": {
+    "total": 5,
+    "passedCount": 1,
+    "failedCount": 4,
+    "passed": false
+  },
+  "scenarios": [
+    {
+      "scenario": "burst",
+      "patientCount": 100,
+      "totalCount": 100,
+      "successfulCount": 100,
+      "errors": 0,
+      "durationMs": 786,
+      "throughputReqPerSec": 127.23,
+      "percentiles": {
+        "count": 100,
+        "min": 302,
+        "max": 767,
+        "avg": 561.06,
+        "p50": 616.5,
+        "p90": 685.4,
+        "p95": 693.05,
+        "p99": 766.01
+      },
+      "hasDuplicates": false,
+      "duplicateCount": 0,
+      "isContiguous": true,
+      "convergenceTimeMs": 885,
+      "isConverged": true,
+      "coalescing": {
+        "avgQueueUpdates": 4.22,
+        "minQueueUpdates": 1,
+        "maxQueueUpdates": 5,
+        "ratio": 0.042199999999999994
+      },
+      "passed": true,
+      "failures": [],
+      "metrics": {
+        "sampleCount": 2,
+        "rssMB": {
+          "min": 92.93,
+          "max": 114.05,
+          "avg": 103.49
+        },
+        "heapUsedMB": {
+          "min": 29.5,
+          "max": 47.57,
+          "avg": 38.53
+        },
+        "cpuUserMs": {
+          "min": 172,
+          "max": 1265,
+          "avg": 718.5
+        },
+        "cpuSystemMs": {
+          "min": 31,
+          "max": 141,
+          "avg": 86
+        },
+        "eventLoopDelayP99": {
+          "min": 34.8,
+          "max": 127.4,
+          "avg": 81.1
+        },
+        "connectedSocketsPeak": 100,
+        "lastJobQueue": {
+          "timers": {
+            "waiting": 0,
+            "active": 0,
+            "completed": 0,
+            "failed": 0,
+            "delayed": 0
+          },
+          "notify": {
+            "waiting": 0,
+            "active": 0,
+            "completed": 89,
+            "failed": 0,
+            "delayed": 0
+          }
+        }
+      }
+    },
+    {
+      "scenario": "burst",
+      "patientCount": 250,
+      "totalCount": 250,
+      "successfulCount": 150,
+      "errors": 100,
+      "durationMs": 1539,
+      "throughputReqPerSec": 97.47,
+      "percentiles": {
+        "count": 150,
+        "min": 1064,
+        "max": 1513,
+        "avg": 1370.32,
+        "p50": 1422.5,
+        "p90": 1472.1,
+        "p95": 1474,
+        "p99": 1503.69
+      },
+      "hasDuplicates": false,
+      "duplicateCount": 0,
+      "isContiguous": false,
+      "convergenceTimeMs": 16633,
+      "isConverged": false,
+      "coalescing": {
+        "avgQueueUpdates": 2,
+        "minQueueUpdates": 2,
+        "maxQueueUpdates": 2,
+        "ratio": 0.008
+      },
+      "passed": false,
+      "failures": [
+        "Token numbers are not strictly contiguous",
+        "Errors encountered during burst joins: 100"
+      ],
+      "metrics": {
+        "sampleCount": 19,
+        "rssMB": {
+          "min": 80.51,
+          "max": 172.59,
+          "avg": 142.21
+        },
+        "heapUsedMB": {
+          "min": 33.63,
+          "max": 81.37,
+          "avg": 64.64
+        },
+        "cpuUserMs": {
+          "min": 0,
+          "max": 1375,
+          "avg": 236.84
+        },
+        "cpuSystemMs": {
+          "min": 0,
+          "max": 141,
+          "avg": 31.26
+        },
+        "eventLoopDelayP99": {
+          "min": 34.7,
+          "max": 174.46,
+          "avg": 50.85
+        },
+        "connectedSocketsPeak": 250,
+        "lastJobQueue": {
+          "timers": {
+            "waiting": 0,
+            "active": 0,
+            "completed": 0,
+            "failed": 0,
+            "delayed": 0
+          },
+          "notify": {
+            "waiting": 0,
+            "active": 0,
+            "completed": 93,
+            "failed": 0,
+            "delayed": 0
+          }
+        }
+      }
+    },
+    {
+      "scenario": "burst",
+      "patientCount": 500,
+      "totalCount": 500,
+      "successfulCount": 225,
+      "errors": 275,
+      "durationMs": 2889,
+      "throughputReqPerSec": 77.88,
+      "percentiles": {
+        "count": 225,
+        "min": 1634,
+        "max": 2791,
+        "avg": 2545.57,
+        "p50": 2610,
+        "p90": 2780,
+        "p95": 2782,
+        "p99": 2785.28
+      },
+      "hasDuplicates": false,
+      "duplicateCount": 0,
+      "isContiguous": false,
+      "convergenceTimeMs": 17921,
+      "isConverged": false,
+      "coalescing": {
+        "avgQueueUpdates": 1.9,
+        "minQueueUpdates": 0,
+        "maxQueueUpdates": 2,
+        "ratio": 0.0038
+      },
+      "passed": false,
+      "failures": [
+        "Token numbers are not strictly contiguous",
+        "Errors encountered during burst joins: 275",
+        "Join latency p95 (2782ms) exceeded threshold (2500ms)"
+      ],
+      "metrics": {
+        "sampleCount": 20,
+        "rssMB": {
+          "min": 82.68,
+          "max": 151.98,
+          "avg": 142.57
+        },
+        "heapUsedMB": {
+          "min": 34.22,
+          "max": 73.06,
+          "avg": 64.55
+        },
+        "cpuUserMs": {
+          "min": 0,
+          "max": 2296,
+          "avg": 334.4
+        },
+        "cpuSystemMs": {
+          "min": 0,
+          "max": 141,
+          "avg": 37.5
+        },
+        "eventLoopDelayP99": {
+          "min": 33.59,
+          "max": 215.09,
+          "avg": 57.83
+        },
+        "connectedSocketsPeak": 500,
+        "lastJobQueue": {
+          "timers": {
+            "waiting": 0,
+            "active": 0,
+            "completed": 0,
+            "failed": 0,
+            "delayed": 0
+          },
+          "notify": {
+            "waiting": 0,
+            "active": 0,
+            "completed": 93,
+            "failed": 0,
+            "delayed": 0
+          }
+        }
+      }
+    },
+    {
+      "scenario": "flow",
+      "patientCount": 300,
+      "totalCount": 300,
+      "completedCount": 101,
+      "stuckCount": 0,
+      "errors": 1,
+      "durationMs": 335734,
+      "queueDrainRatePerMin": 18.05,
+      "completionRate": 0.34,
+      "callNextToCalledPercentiles": {
+        "count": 101,
+        "min": 1582,
+        "max": 4368,
+        "avg": 1764.02,
+        "p50": 1678,
+        "p90": 1930,
+        "p95": 2075,
+        "p99": 2740
+      },
+      "notificationPercentiles": {
+        "count": 101,
+        "min": 1582,
+        "max": 4368,
+        "avg": 1764.02,
+        "p50": 1678,
+        "p90": 1930,
+        "p95": 2075,
+        "p99": 2740
+      },
+      "passed": false,
+      "failures": [
+        "Errors encountered during flow: 1",
+        "Call-next to called latency p95 (2075ms) exceeded threshold (1500ms)",
+        "Completion rate (34%) below required (100%)"
+      ],
+      "metrics": {
+        "sampleCount": 336,
+        "rssMB": {
+          "min": 95.47,
+          "max": 254.79,
+          "avg": 181.22
+        },
+        "heapUsedMB": {
+          "min": 37.1,
+          "max": 167.91,
+          "avg": 90.17
+        },
+        "cpuUserMs": {
+          "min": 0,
+          "max": 1390,
+          "avg": 160.95
+        },
+        "cpuSystemMs": {
+          "min": 0,
+          "max": 188,
+          "avg": 24.13
+        },
+        "eventLoopDelayP99": {
+          "min": 0,
+          "max": 3430.94,
+          "avg": 142.12
+        },
+        "connectedSocketsPeak": 500,
+        "lastJobQueue": {
+          "timers": {
+            "waiting": 0,
+            "active": 0,
+            "completed": 0,
+            "failed": 0,
+            "delayed": 0
+          },
+          "notify": {
+            "waiting": 0,
+            "active": 0,
+            "completed": 200,
+            "failed": 0,
+            "delayed": 0
+          }
+        }
+      }
+    },
+    {
+      "scenario": "reconnect",
+      "patientCount": 200,
+      "totalCount": 200,
+      "reconnectedCount": 200,
+      "strandedCount": 0,
+      "peopleAheadMismatches": 0,
+      "errors": 0,
+      "durationMs": 29207,
+      "percentiles": {
+        "count": 200,
+        "min": 11602,
+        "max": 29207,
+        "avg": 21868.35,
+        "p50": 21070.5,
+        "p90": 28226.1,
+        "p95": 28672.15,
+        "p99": 29004.7
+      },
+      "passed": false,
+      "failures": [
+        "Reconnect storm duration (29207ms) exceeded threshold (12000ms)"
+      ],
+      "metrics": {
+        "sampleCount": 47,
+        "rssMB": {
+          "min": 142.29,
+          "max": 343.61,
+          "avg": 191.2
+        },
+        "heapUsedMB": {
+          "min": 35.54,
+          "max": 257.07,
+          "avg": 97.66
+        },
+        "cpuUserMs": {
+          "min": 0,
+          "max": 1937,
+          "avg": 336.11
+        },
+        "cpuSystemMs": {
+          "min": 0,
+          "max": 125,
+          "avg": 31.26
+        },
+        "eventLoopDelayP99": {
+          "min": 0,
+          "max": 2285.9,
+          "avg": 272.85
+        },
+        "connectedSocketsPeak": 300,
+        "lastJobQueue": {
+          "timers": {
+            "waiting": 0,
+            "active": 0,
+            "completed": 0,
+            "failed": 0,
+            "delayed": 0
+          },
+          "notify": {
+            "waiting": 0,
+            "active": 0,
+            "completed": 200,
+            "failed": 0,
+            "delayed": 0
+          }
+        }
+      }
+    }
+  ]
+}

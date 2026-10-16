@@ -13,6 +13,7 @@ import { Skeleton } from './components/ui/Skeleton';
 const Login = lazy(() => import('./pages/Login'));
 const PatientHome = lazy(() => import('./pages/PatientHome'));
 const StaffDashboard = lazy(() => import('./pages/StaffDashboard'));
+const QrJoin = lazy(() => import('./pages/QrJoin'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 
 // Lazy load DevStates only in DEV
@@ -72,6 +73,9 @@ export function App() {
                 <Route element={<ProtectedRoute allowedRoles={['staff', 'admin']} />}>
                   <Route path="/staff" element={<StaffDashboard />} />
                 </Route>
+
+                {/* QR Code Join Route */}
+                <Route path="/join/:serviceId" element={<QrJoin />} />
 
                 {/* Dev States fixture gallery (DEV only) */}
                 {import.meta.env.DEV && DevStates && (

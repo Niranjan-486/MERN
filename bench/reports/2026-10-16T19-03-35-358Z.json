@@ -1,0 +1,99 @@
+{
+  "timestamp": 1792177415358,
+  "envInfo": {
+    "cpuModel": "13th Gen Intel(R) Core(TM) i5-1334U",
+    "cpuCores": 12,
+    "totalRamGb": 15.72,
+    "os": "Windows_NT 10.0.26200 (x64)",
+    "nodeVersion": "v20.19.6",
+    "gitCommit": "4ba0204",
+    "mongoVersion": "7.0.43",
+    "redisVersion": "7.4.11",
+    "apiUrl": "http://localhost:10050"
+  },
+  "summary": {
+    "total": 1,
+    "passedCount": 1,
+    "failedCount": 0,
+    "passed": true
+  },
+  "scenarios": [
+    {
+      "scenario": "burst",
+      "patientCount": 100,
+      "totalCount": 100,
+      "successfulCount": 100,
+      "errors": 0,
+      "durationMs": 701,
+      "throughputReqPerSec": 142.65,
+      "percentiles": {
+        "count": 100,
+        "min": 183,
+        "max": 688,
+        "avg": 546.86,
+        "p50": 584,
+        "p90": 649,
+        "p95": 653.1,
+        "p99": 683.05
+      },
+      "hasDuplicates": false,
+      "duplicateCount": 0,
+      "isContiguous": true,
+      "convergenceTimeMs": 794,
+      "isConverged": true,
+      "coalescing": {
+        "avgQueueUpdates": 2.22,
+        "minQueueUpdates": 2,
+        "maxQueueUpdates": 3,
+        "ratio": 0.0222
+      },
+      "passed": true,
+      "failures": [],
+      "metrics": {
+        "sampleCount": 2,
+        "rssMB": {
+          "min": 97.55,
+          "max": 113.74,
+          "avg": 105.65
+        },
+        "heapUsedMB": {
+          "min": 29.26,
+          "max": 45.17,
+          "avg": 37.22
+        },
+        "cpuUserMs": {
+          "min": 171,
+          "max": 1250,
+          "avg": 710.5
+        },
+        "cpuSystemMs": {
+          "min": 32,
+          "max": 125,
+          "avg": 78.5
+        },
+        "eventLoopDelayP99": {
+          "min": 34.31,
+          "max": 105.12,
+          "avg": 69.72
+        },
+        "connectedSocketsPeak": 100,
+        "lastJobQueue": {
+          "timers": {
+            "waiting": 0,
+            "active": 0,
+            "completed": 0,
+            "failed": 0,
+            "delayed": 0
+          },
+          "notify": {
+            "waiting": 0,
+            "active": 0,
+            "completed": 200,
+            "failed": 0,
+            "delayed": 0
+          }
+        }
+      }
+    }
+  ]
+}

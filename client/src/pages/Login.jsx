@@ -8,6 +8,18 @@ import { getFriendlyErrorMessage } from '../lib/errors';
 import { Button } from '../components/ui/Button';
 import { ThemeToggle } from '../components/ui/ThemeToggle';
 
+function getValidReturnTo() {
+  try {
+    const returnTo = sessionStorage.getItem('returnTo');
+    if (!returnTo || typeof returnTo !== 'string') return null;
+    // Accept only relative same-origin paths starting with a single '/'
+    if (returnTo.startsWith('/') && !returnTo.startsWith('//') && !returnTo.includes('\\')) {
+      return returnTo;
+    }
+  } catch (_) {}
+  return null;
+}
+
 export function Login() {
   const { isAuthenticated, user, login } = useAuth();
   const navigate = useNavigate();
@@ -28,7 +40,11 @@ export function Login() {
   // Redirect if already logged in
   useEffect(() => {
     if (isAuthenticated && user) {
-      if (user.role === 'staff' || user.role === 'admin') {
+      const returnTo = getValidReturnTo();
+      if (returnTo) {
+        sessionStorage.removeItem('returnTo');
+        navigate(returnTo, { replace: true });
+      } else if (user.role === 'staff' || user.role === 'admin') {
         navigate('/staff', { replace: true });
       } else {
         navigate('/patient', { replace: true });
@@ -78,7 +94,11 @@ export function Login() {
       const res = await api.post('/api/auth/verify-otp', payload);
       login(res.token, res.user);
 
-      if (res.user?.role === 'staff' || res.user?.role === 'admin') {
+      const returnTo = getValidReturnTo();
+      if (returnTo) {
+        sessionStorage.removeItem('returnTo');
+        navigate(returnTo, { replace: true });
+      } else if (res.user?.role === 'staff' || res.user?.role === 'admin') {
         navigate('/staff', { replace: true });
       } else {
         navigate('/patient', { replace: true });
